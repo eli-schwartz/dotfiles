@@ -1,0 +1,4 @@
+[attr]crypt       filter=git-crypt diff=git-crypt
+
+*.crypt           crypt
+*secrets          crypt

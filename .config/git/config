@@ -1,0 +1,108 @@
+[core]
+	editor = vim
+	pager = /usr/share/git/diff-highlight/diff-highlight|less -+FX -R
+[user]
+	name = Eli Schwartz
+	email = eschwartz93@gmail.com
+[log]
+	date = local
+	decorate = true
+[pull]
+	ff = only
+[push]
+	default = simple
+	followTags = true
+[apply]
+	whitespace = warn
+[rebase]
+	stat = true
+[format]
+	pretty = fuller
+[tag]
+	forceSignAnnotated = true
+[commit]
+	gpgSign = true
+[alias]
+	log = log --pretty=fuller
+	undo-commit = reset --soft HEAD^
+	new = log --pretty=fuller -p @{1}..@{0}
+	aliases = !git config --get-regexp 'alias.*' | colrm 1 6 | sed 's/[ ]/ = /'
+	mergelog = diff --stat --summary @{1}..@{0}
+	unstage = reset HEAD --
+	ultrapack = repack -adf --window=250
+	pkgver = "!git describe --long | sed \"s/^v//;s/\\([^-]*-g\\)/r\\1/;s/-/./g\""
+	tagv = !git tag -v $(git describe --abbrev=0)
+	ainit = "!git init && git add --all && git commit -m 'initial commit'"
+	ls = ls-files
+	refs = for-each-ref
+	logs = log --show-signature
+	tip = !git --no-pager log -1
+	github-release = "!f() { local repo=$(basename \"$(pwd)\") tag=$1; git archive --prefix=${repo}-${tag#v}/ -o ${repo}-${tag#v}.tar.gz ${tag}; }; f"
+[hub]
+	protocol = ssh
+	test =
+	reportCrash = never
+	autoUpdate = never
+[rerere]
+	enabled = true
+[help]
+	autocorrect = 10
+[github]
+	user = eli-schwartz
+[svn]
+	autocrlf = input
+[merge]
+	tool = diffconflicts
+[mergetool "diffconflicts"]
+	cmd = diffconflicts vim $BASE $LOCAL $REMOTE $MERGED
+	trustExitCode = true
+	keepBackup = false
+# Alias push over SSH, clone over HTTPS
+[url "https://git.archlinux.org/"]
+	insteadOf = git://git.archlinux.org
+[url "aur:"]
+	pushInsteadOf = https://aur.archlinux.org/
+[url "https://github.com/"]
+	insteadOf = git://github.com/
+[url "git@github.com:"]
+	pushInsteadOf = git://github.com/
+    pushInsteadOf = https://github.com/
+[url "git@gist.github.com:"]
+	pushInsteadOf = git://gist.github.com/
+    pushInsteadOf = https://gist.github.com/
+# Bzr is weird, but this idea is kind of interesting...
+[url "git@github.com:"]
+	insteadOf = gh:
+[url "git@github.com:eli-schwartz/"]
+	insteadOf = ghme:
+[url "git+ssh://eschwartz@git.launchpad.net/"]
+	insteadOf = lp:
+[url "git+ssh://eschwartz@git.launchpad.net/~eschwartz/+git/"]
+	insteadOf = lpme:
+[sendemail]
+	smtpencryption = tls
+	smtpserver = smtp.gmail.com
+	smtpserverport = 587
+	smtpuser = eschwartz93@gmail.com
+	suppresscc = self
+[imap]
+	user = eschwartz93@gmail.com
+	folder = [Gmail]/Drafts
+	host = imaps://imap.gmail.com
+	port = 993
+[diff]
+	renames = copies
+	renameLimit = 0
+	compactionHeuristic = true
+[status]
+	submoduleSummary = true
+[includeIf "gitdir:archlinux/"]
+	path = config-archlinux
+[includeIf "gitdir:archclassroom/"]
+	path = config-archlinux
+[includeIf "gitdir:pkgbuilds/"]
+	path = config-archlinux
+[includeIf "gitdir:/var/aur/"]
+	path = config-archlinux
+[include]
+	path = config-secrets

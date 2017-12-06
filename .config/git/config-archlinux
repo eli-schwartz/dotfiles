@@ -1,0 +1,13 @@
+[user]
+	email = eschwartz@archlinux.org
+[sendemail]
+	smtpserver = mail.archlinux.org
+	smtpuser = eschwartz@archlinux.org
+	smtpencryption = tls
+	smtpserverport = 587
+	bcc = eschwartz@archlinux.org
+[imap]
+	user = eschwartz@archlinux.org
+	folder = Drafts
+	host = imaps://mail.archlinux.org
+	port = 143

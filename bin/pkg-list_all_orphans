@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from pycman import config
+
+
+
+parser = ArgumentParser(description='List packages that are installed as dependencies but which are not deps or optdeps of other packages.')
+parser.add_argument(
+  '-c', '--config', metavar='<path>', default='/etc/pacman.conf',
+  help='Pacman configuration file'
+)
+
+
+
+def list_true_orphans(args=None):
+  args = parser.parse_args(args)
+  h = config.init_with_config(args.config)
+  optdeps = set()
+  orphans = set()
+  for p in h.get_localdb().pkgcache:
+    if p.reason != 0 and not p.compute_requiredby():
+      orphans.add(p.name)
+    for o in p.optdepends:
+      n = o.split(':')[0].strip()
+      optdeps.add(n)
+  true_orphans = orphans - optdeps
+  print("Packages with no requires/opt requires:")
+  for o in sorted(true_orphans):
+    print('  ' + o)
+  print("Packages with opt requires but no requires:")
+  for o in sorted(orphans - true_orphans):
+    print('  ' + o)
+
+if __name__ == '__main__':
+  try:
+    list_true_orphans()
+  except (KeyboardInterrupt, BrokenPipeError):
+    pass

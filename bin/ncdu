@@ -1,0 +1,25 @@
+#!/bin/sh
+
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/ncdu.dump.gz"
+opts="-x --confirm-quit /"
+
+set -e
+dump() {
+    /usr/bin/ncdu -o- $opts | gzip > "$cache.tmp"
+    mv -f "$cache.tmp" "$cache"
+}
+
+live() {
+    /usr/bin/ncdu $opts
+}
+
+load() {
+    gzip -dc "$cache" | /usr/bin/ncdu -f- $opts
+}
+
+case $1 in
+    dump)   dump;;
+    load)   load;;
+    live)   live;;
+    *)      /usr/bin/ncdu "$@"
+esac

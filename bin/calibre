@@ -1,0 +1,28 @@
+#!/bin/bash
+
+logfile="/tmp/calibre-debug-$USER.log"
+eval $(systemctl --user show calibre-server -q -p ActiveState)
+
+toggle-server() {
+    local action=$1
+
+    if [[ $ActiveState = active ]]; then
+        systemctl --user $action calibre-server
+    fi
+}
+
+toggle-server stop
+
+if (( $# == 0 )) || [[ "$1" = "--detach" ]]; then
+    echo -e "\n\n\nStarting calibre at $(date).\n\n\n" >> "$logfile" 2>&1
+    # FIXME: Once calibre supports running the GUI with a server database, we can stop doing this.
+    if [[ $ActiveState = active ]]; then
+        echo -e "Pausing the systemd-managed server due to calibre v3 restraints.\n" >> "$logfile" 2>&1
+        echo -e "FIXME: Once calibre supports running the GUI with a server database, we can stop doing this.\n\n\n" >> "$logfile" 2>&1
+    fi
+    calibre-debug -g 2>&1 | tee -a "$logfile"
+else
+    /usr/bin/calibre "$@"
+fi
+
+toggle-server start
