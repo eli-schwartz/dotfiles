@@ -1,0 +1,1210 @@
+#!/usr/bin/env perl
+# getpaste - retrieves raw text from pastebins
+# retrieved from https://github.com/grawity/code/raw/master/net/getpaste
+#
+# (c) 2010-2015 Mantas Mikulėnas <grawity@gmail.com>
+# Released under the MIT License (dist/LICENSE.mit)
+use v5.10;
+use warnings;
+use strict;
+no locale;
+use open qw(:std :utf8);
+use Encode qw(decode);
+use Getopt::Long qw(:config bundling no_ignore_case);
+use JSON;
+use LWP::UserAgent;
+use MIME::Base64;
+
+my $opt_insecure = 0;
+my $opt_show_url = 0;
+my $opt_batch = 0;
+
+# generic utility functions {{{
+
+BEGIN {
+	if (eval {require Nullroute::Lib}) {
+		Nullroute::Lib->import(qw(_debug _warn _err _die));
+	} else {
+		$::arg0 = (split m!/!, $0)[-1];
+		$::debug = !!$ENV{DEBUG};
+		$::warnings = 0;
+		$::errors = 0;
+		sub _debug { warn "debug: @_\n" if $::debug; }
+		sub _warn  { warn "warning: @_\n"; ++$::warnings; }
+		sub _err   { warn "error: @_\n"; ! ++$::errors; }
+		sub _die   { _err(@_); exit 1; }
+	}
+}
+
+sub chunk {
+	my ($buf, $bs) = @_;
+
+	return unpack("(A$bs)*", $buf);
+}
+
+sub _dump {
+	use Data::Dumper;
+	return Data::Dumper->new(\@_)->Terse(1)->Indent(0)->Dump;
+}
+
+sub _prompt {
+	my ($msg) = @_;
+
+	print STDERR "\e[1m$msg\e[m "; $|++;
+	chomp(my $resp = <STDIN>);
+	return $resp;
+}
+
+sub check_deps {
+	#require Compress::LZW;
+	require Compress::Raw::Zlib;
+	require CryptX;
+	exit;
+}
+
+# }}}
+# URL parsing functions {{{
+
+my $URL_RE = qr{
+		(?:    (?<scheme> [^:\/?\#]+) : )?
+		(?: // (?<host> [^/?#]*)        )?
+		       (?<path> [^?#]*)
+		(?: \? (?<query> [^#]*)         )?
+		(?: \# (?<fragment> .*)         )?
+	}x;
+
+sub parse_url {
+	my ($url) = @_;
+
+	if ($url =~ $URL_RE) { return my %url = %+; }
+}
+
+sub unparse_url {
+	my (%url) = @_;
+
+	my $url = $url{scheme}."://".$url{host};
+	$url .= $url{path}         if defined($url{path});
+	$url .= "?".$url{query}    if defined($url{query});
+	$url .= "#".$url{fragment} if defined($url{fragment});
+	return $url;
+}
+
+# }}}
+# translation database functions {{{
+
+sub smart_match {
+	my ($str, $pattern) = @_;
+
+	if (!defined $str) {
+		return;
+	}
+	elsif (ref($pattern) eq "ARRAY") {
+		for (@$pattern) {
+			my @res = smart_match($str, $_);
+			return @res if @res;
+		}
+	}
+	elsif (ref($pattern) eq "Regexp" && $str =~ $pattern) {
+		# If $pattern has no capture groups, =~ will return an
+		# (1,) in list context since it needs a trueish value.
+		# This bit of linenoise works consistently in all cases.
+		return map {substr($str, $-[$_], $+[$_]-$-[$_])} 0..$#-;
+	}
+	elsif (ref($pattern) eq "" && $str eq $pattern) {
+		return $str;
+	}
+	return;
+}
+
+my $EXPN_RE = qr/#(#|\d|\{\w+.\d+\})/;
+
+sub expn {
+	my ($str, $data, $def) = @_;
+
+	for ($str) {
+		if ($_ eq "#") {
+			return $_;
+		} elsif ($def && /^(\d+)$/) {
+			return $data->{$def}->[$1] // "";
+		} elsif (/^\{(\w+).(\d+)\}$/) {
+			return $data->{$1}->[$2] // "";
+		} else {
+			_err("unknown expansion '#$_'");
+			return "\x{1F612}";
+		}
+	}
+};
+
+my @SITES;
+
+sub translate_url {
+	my ($url) = @_;
+
+	my @fields = qw(scheme host path query fragment);
+
+	my %url = parse_url($url);
+
+	unless (%url && defined($url{host}) && defined($url{path})) {
+		_die("bad URL: $url");
+	}
+
+	_debug("scheme='".($url{scheme}//"")."'".
+		", host='".($url{host}//"")."'".
+		", path='".($url{path}//"")."'".
+		", query='".($url{query}//"")."'".
+		", frag='".($url{fragment}//"")."'");
+
+SITE:	for my $site (@SITES) {
+		use Data::Dumper;
+
+		my %match;
+		for (@fields) {
+			my $pat = $site->{"$_"} or next;
+			my @res = smart_match($url{$_}, $pat) or next SITE;
+			_debug("match $_ ~ "._dump($pat));
+			_debug(" -> "._dump(\@res));
+			$match{$_} = \@res;
+		}
+		next if !%match;
+
+		if ($site->{"note"}) { _debug($site->{"note"}); }
+
+		for (@fields) {
+			$match{$_} //= [$url{$_}];
+		}
+
+		for (@fields) {
+			my $fmt = $site->{"to_$_"} // next;
+			$fmt =~ s/$EXPN_RE/expn($1, \%match, $_)/ge;
+			$url{$_} = $fmt;
+		}
+
+		my $raw_url = unparse_url(%url);
+		my $func = $site->{"parser"};
+		if ($func) {
+			return ($raw_url, $func, $url{fragment});
+		} else {
+			return ($raw_url);
+		}
+	}
+	return;
+}
+
+sub retrieve_paste {
+	my ($url) = @_;
+
+	my ($raw_url, $handler, @hargs) = translate_url($url);
+
+	if ($opt_batch) {
+		if ($handler) {
+			print "$url [internal]\n";
+		} elsif ($raw_url) {
+			print "$url $raw_url\n";
+		} else {
+			print "$url [unknown]\n";
+		}
+	} elsif (!$raw_url && !$handler) {
+		_err("unknown pastebin: $url");
+	} elsif ($opt_show_url) {
+		if ($handler) {
+			_err("pastebin does not have raw URLs: $url");
+		} else {
+			print "$raw_url\n";
+		}
+	} else {
+		if ($handler) {
+			my $output = $handler->($raw_url, @hargs);
+			if (defined $output) {
+				utf8::decode($output);
+				print "$output\n";
+			} else {
+				_err("paste extraction failed");
+			}
+		} else {
+			getprint($raw_url);
+		}
+	}
+}
+
+sub dl_recursive {
+	my ($url) = @_;
+
+	my $target = follow($url);
+
+	return retrieve_paste($target);
+}
+
+# }}}
+# HTTP client functions {{{
+
+my $UA = LWP::UserAgent->new;
+
+sub get {
+	my ($url) = @_;
+
+	_debug("fetching '$url'");
+	$UA->default_header("Referer" => $url);
+	my $resp = $UA->get($url);
+
+	if ($resp->is_success) {
+		_debug("fetch complete: '".$resp->status_line."'");
+		return $resp->decoded_content // $resp->content;
+	} else {
+		_err("fetch failed: '".$resp->status_line."'");
+		return;
+	}
+}
+
+sub getprint {
+	my ($url) = @_;
+
+	my $data = get($url);
+	if (defined $data) {
+		print $data;
+	}
+}
+
+sub post {
+	my ($url, %form) = @_;
+
+	_debug("posting to '$url'");
+	$UA->default_header("Referer" => $url);
+	my $resp = $UA->post($url, \%form);
+
+	if ($resp->is_success) {
+		_debug("post complete: '".$resp->status_line."'");
+		return $resp->decoded_content // $resp->content;
+	} else {
+		_err("post failed: '".$resp->status_line."'");
+		return;
+	}
+}
+
+sub follow {
+	my ($url) = @_;
+
+	_debug("following '$url'");
+	$UA->default_header("Referer" => $url);
+	my $resp = $UA->head($url);
+
+	if ($resp->is_success) {
+		_debug("fetch complete: '".$resp->status_line."'");
+		_debug(" -> '$_'") for map {$_->request->uri} ($resp->redirects, $resp);
+		return $resp->request->uri->as_string;
+	} else {
+		_err("fetch failed: '".$resp->status_line."'");
+		return;
+	}
+}
+
+# }}}
+# decoders {{{
+
+sub decode_sour_base64 {
+	my ($str) = @_;
+
+	$str =~ y!_-!/+!;
+	return decode_base64($str);
+}
+
+sub decode_cescape {
+	my ($str) = @_;
+
+	$str =~ s/\\x([0-9A-Fa-f]{2})/chr hex $1/ge;
+	return $str;
+}
+
+sub encode_hex {
+	my ($buf) = @_;
+
+	return unpack("H*", $buf);
+}
+
+sub decode_hex {
+	my ($str) = @_;
+
+	return pack("H*", $str);
+}
+
+sub decode_html {
+	my ($str) = @_;
+
+	$str =~ s/&lt;/</g;
+	$str =~ s/&gt;/>/g;
+	$str =~ s/&quot;/"/g;
+	$str =~ s/&amp;/\&/g;
+	return $str;
+}
+
+sub try_decode_json {
+	my ($data) = @_;
+
+	return ref $data ? $data : decode_json($data);
+}
+
+# }}}
+# decompressors {{{
+
+sub decompress_deflate {
+	eval {
+		require Compress::Raw::Zlib;
+	} or _die("missing Perl package 'Compress::Raw::Zlib'");
+
+	my ($buf, %opt) = @_;
+
+	my $wbits;
+	my $stream;
+	my $status;
+	my $outbuf;
+
+	if ($opt{is_gzip}) {
+		$wbits = Compress::Raw::Zlib->WANT_GZIP;
+	} else {
+		$wbits = -Compress::Raw::Zlib->MAX_WBITS;
+	}
+
+	($stream, $status) = Compress::Raw::Zlib::Inflate->new(-WindowBits => $wbits);
+	if ($status != Compress::Raw::Zlib->Z_OK) {
+		_die("inflateInit failed: $status");
+	}
+
+	$status = $stream->inflate($buf, $outbuf);
+	if ($status != Compress::Raw::Zlib->Z_OK &&
+	    $status != Compress::Raw::Zlib->Z_STREAM_END) {
+		_die("inflate failed: $status (".$stream->msg.")");
+	}
+
+	return $outbuf;
+}
+
+sub decompress_gzip {
+	my ($buf) = @_;
+
+	return decompress_deflate($buf, is_gzip => 1);
+}
+
+sub decompress_lzw {
+	eval {
+		require Compress::LZW;
+	} or _die("missing Perl package 'Compress::LZW'");
+
+	my ($buf) = @_;
+
+	return Compress::LZW->decompress($buf);
+}
+
+# }}}
+# extra KDFs {{{
+
+sub EVP_BytesToKey {
+	eval {
+		require Crypt::Digest;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::Digest->import("digest_data");
+
+	my ($salt, $passphrase, $ks, $ivs, %opt) = @_;
+
+	my $algo = uc($opt{kdf_algo} // "MD5");
+	my $hash = "";
+	my $buf = "";
+
+	while (length($buf) < $ks + $ivs) {
+		$hash = digest_data($algo, $hash, $passphrase, $salt);
+		$buf .= $hash;
+	}
+
+	my $key = substr($buf, 0, $ks);
+	my $iv = substr($buf, $ks, $ivs);
+
+	return ($key, $iv);
+}
+
+# }}}
+# extra ciphers {{{
+
+sub ocb2_times2 {
+	my ($block) = @_;
+
+	my @block = unpack("C*", $block);
+	my $carry = ($block[0] >> 7) & 0x1;
+	for (my $i = 0; $i < $#block; $i++) {
+		$block[$i] = ($block[$i] << 1) | (($block[$i+1] >> 7) & 0x1);
+	}
+	$block[$#block] = ($block[$#block] << 1) ^ ($carry * 135);
+	return pack("C*", map {$_ & 0xFF} @block);
+}
+
+sub ocb2_decrypt_verify {
+	eval {
+		require Crypt::Cipher;
+		require Crypt::Mac::PMAC;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::Mac::PMAC->import("pmac");
+
+	my ($cipher, $key, $nonce, $aad, $ciphertext, $tag) = @_;
+
+	my $c = Crypt::Cipher->new($cipher, $key);
+	my $bs = $c->blocksize;
+	my $ts = 64 / 8;
+
+	my @ciphertext = chunk($ciphertext, $bs);
+	my $final      = pop(@ciphertext);
+	my $nfinal     = length($final);
+	my $pad        = pack("N*", 0, 0, 0, $nfinal * 8);
+	my $delta      = ocb2_times2($c->encrypt($nonce));
+	my $checksum   = "\x00" x $bs;
+	my $output     = "";
+
+	for my $block (@ciphertext) {
+		$block = $c->decrypt($block ^ $delta) ^ $delta;
+		$delta = ocb2_times2($delta);
+		$output .= $block;
+		$checksum ^= $block;
+	}
+
+	$final = $final ^ $c->encrypt($delta ^ $pad);
+	$output .= substr($final, 0, $nfinal);
+	$checksum ^= $final;
+
+	$checksum = $c->encrypt($checksum ^ $delta ^ ocb2_times2($delta));
+	$checksum ^= pmac($cipher, $key, $aad) if length($aad);
+	$checksum = substr($checksum, 0, $ts);
+
+	return if $checksum ne $tag;
+	return $output;
+}
+
+# }}}
+# unwrappers {{{
+#
+# These functions parse an encrypted/wrapped package (obtaining cipher, salt,
+# iterations, IV...) and return decrypted/unwrapped data.
+
+sub unwrap_defuse {
+	eval {
+		require Crypt::AuthEnc::OCB;
+		require Crypt::KeyDerivation;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::AuthEnc::OCB->import(":all");
+	Crypt::KeyDerivation->import("pbkdf2");
+
+	# serialization: custom [iter + salt + iv + data]
+	# key derivation: PBKDF2-SHA256
+	# encryption: AES128-OCB2
+
+	my ($data, $passwd) = @_;
+
+	my @data = split(/:/, $data);
+	return if @data != 4;
+
+	my $iter = int($data[0]);
+	my $salt = decode_hex($data[1]);
+	my $iv   = decode_hex($data[2]);
+	my $ct   = decode_hex($data[3]);
+	my $ks   = 128 / 8;
+	my $ts   = 64 / 8;
+
+	my $key  = pbkdf2($passwd, $salt, $iter, "SHA256", $ks);
+	my $tag  = substr($ct, -$ts, $ts, "");
+
+	return ocb2_decrypt_verify("AES", $key, $iv, "", $ct, $tag)
+	       // _die("decryption failed");
+}
+
+sub unwrap_ezcrypt {
+	eval {
+		require Crypt::Cipher::AES;
+		require Crypt::KeyDerivation;
+		require Crypt::Mode::OFB;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::KeyDerivation->import("pbkdf2");
+
+	# serialization: raw [salt + data]
+	# key derivation: PBKDF2-SHA1
+	# encryption: AES-256-OFB
+
+	my ($data, $passwd) = @_;
+
+	my $ks   = Crypt::Cipher::AES->keysize;
+	my $bs   = Crypt::Cipher::AES->blocksize;
+
+	my $salt = substr($data, 0, $bs, "");
+	my $iter = 1; # LOL
+	my $key  = pbkdf2($passwd, $salt, $iter, "SHA1", $ks);
+	my $iv   = $salt;
+
+	return Crypt::Mode::OFB->new("AES")->decrypt($data, $key, $iv);
+}
+
+sub unwrap_ncrypt {
+	my ($data, $passwd, $cipher) = @_;
+
+	# serialization: JSON {data: raw [salt + data], cipher}
+	# key derivation: PBKDF2-SHA1
+	# encryption: AES-256-OFB (usually?)
+
+	if ($cipher eq "AES-256-OFB") {
+		return unwrap_ezcrypt($data, $passwd);
+	} else {
+		_die("unknown cipher '$cipher' for this pastebin");
+	}
+}
+
+sub unwrap_openssl_aes {
+	eval {
+		require Crypt::Cipher::AES;
+		require Crypt::Mode::CBC;
+	} or _die("missing Perl package 'CryptX'");
+
+	# serialization: raw [magic + salt + data]
+	# key derivation: EVP_BytesToKey (usually MD5)
+	# encryption: AES-256-CBC
+
+	my ($data, $passwd, %opt) = @_;
+
+	my $ks    = Crypt::Cipher::AES->keysize;
+	my $bs    = Crypt::Cipher::AES->blocksize;
+
+	my $magic = substr($data, 0, 8, "");
+	my $salt  = substr($data, 0, 8, "");
+
+	if ($magic ne "Salted__") {
+		_die("bad magic value in encrypted data");
+	}
+
+	my ($key, $iv) = EVP_BytesToKey($salt, $passwd, $ks, $bs, %opt);
+
+	_debug("key: <".encode_hex($key).">");
+	_debug("iv: <".encode_hex($iv).">");
+
+	return Crypt::Mode::CBC->new("AES")->decrypt($data, $key, $iv);
+}
+
+sub unwrap_sjcl {
+	eval {
+		require Crypt::AuthEnc::CCM;
+		require Crypt::KeyDerivation;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::AuthEnc::CCM->import(":all");
+	Crypt::KeyDerivation->import("pbkdf2");
+
+	# serialization: JSON
+	# key derivation: PBKDF2-SHA256
+	# encryption: AES128-CCM
+
+	my ($json, $passwd) = @_;
+
+	my $data = try_decode_json($json);
+
+	if (($data->{v} //= "1") != 1) {
+		_die("unsupported SJCL blob version ".$data->{v});
+	}
+	if (($data->{cipher} //= "aes") ne "aes") {
+		_die("unsupported cipher ".$data->{cipher});
+	}
+	if (($data->{mode} //= "ccm") ne "ccm") {
+		_die("unsupported mode ".$data->{mode});
+	}
+
+	my $salt = decode_base64($data->{salt});
+	my $ct   = decode_base64($data->{ct});
+	my $iv   = decode_base64($data->{iv});
+	my $iter = int($data->{iter} || 1000),
+	my $ks   = int($data->{ks} || 128) / 8; # key size
+	my $ts   = int($data->{ts} || 64) / 8; # tag size
+	my $hdr  = decode_base64($data->{adata} // "");
+
+	my $key  = pbkdf2($passwd, $salt, $iter, "SHA256", $ks);
+	my $tag  = substr($ct, -$ts, $ts, "");
+
+	return ccm_decrypt_verify("AES", $key, $iv, $hdr, $ct, $tag)
+	       // _die("decryption failed");
+}
+
+# }}}
+# downloaders {{{
+#
+# These functions take an URL, extract the wrapped package from it, and call an
+# apropriate unwrapper.
+
+sub dl_0bin {
+	my ($url, $frag) = @_;
+
+	if (!length $frag) {
+		_die("cannot decrypt without key in URL fragment");
+	}
+
+	my $body = get($url);
+	$body =~ m{<code>\n\s*(\{.+\})\n\s*</code>} || return;
+
+	my $data = decode_html($1);
+	$data = unwrap_sjcl($data, $frag);
+	$data = decode_base64($data);
+	#$data = decompress_lzw($data);
+	return $data;
+}
+
+sub dl_cryptbin_do {
+	my ($url, $frag) = @_;
+
+	if (!length $frag) {
+		_die("cannot decrypt without key in URL fragment");
+	}
+
+	my $idx = 0;
+	$idx = int $1 if $frag =~ s/,(\d+)$//;
+
+	my $body = get($url);
+	$body =~ m{var message='(.+?)';} || return;
+
+	my $data = decode_base64($1);
+	$data = unwrap_openssl_aes($data, $frag);
+	$data = decode_json($data);
+	if (@$data > 1 && !$idx) {
+		_warn("only the first file of ".@$data." is shown");
+	} elsif (@$data <= $idx) {
+		_die("paste only has ".@$data." files");
+	}
+	$data = $data->[$idx]->{body};
+	return $data;
+}
+
+sub dl_cryptobin {
+	my ($url, $frag) = @_;
+
+	if (!length $frag) {
+		$frag = _prompt("password?");
+	}
+	if (!length $frag) {
+		_die("cannot decrypt without key/password");
+	}
+
+	my $body = get($url);
+	$body =~ m{<textarea name="cipher">(.+?)</textarea} || return;
+
+	my $data = decode_base64($1);
+	$data = unwrap_sjcl($data, $frag);
+	return $data;
+}
+
+sub dl_defuse {
+	my ($url, $frag) = @_;
+
+	my $body = get($url);
+
+	if ($body =~ m{<textarea id="paste"[^>]*>(.+?)</textarea>}) {
+		my $data = $1;
+		$data = decode_html($data);
+		return $data;
+	}
+
+	if ($body =~ m{var encrypted = "(.+?)";$}m) {
+		if (!length $frag) {
+			$frag = _prompt("password?");
+		}
+		if (!length $frag) {
+			_die("cannot decrypt without key/password");
+		}
+
+		my $data = $1;
+		$data = decode_cescape($data);
+		$data = unwrap_defuse($data, $frag);
+		return $data;
+	}
+
+	return;
+}
+
+sub dl_dgl_pastesh {
+	my ($url, $frag) = @_;
+
+	my %url = parse_url($url);
+	$url{path} =~ m!^/([^.]+)!;
+	my $id = $1;
+
+	my $body = get($url) // return;
+	$body =~ s/^(.+)\n//;
+	my $passwd = $id . $1 . $frag . "https://paste.sh";
+
+	my $data = decode_base64($body);
+	$data = unwrap_openssl_aes($data, $passwd, (kdf_algo => "SHA512"));
+	return $data;
+}
+
+sub dl_ezcrypt {
+	eval {
+		require Crypt::Digest::SHA1;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::Digest::SHA1->import("sha1_hex");
+
+	my ($url, $frag) = @_;
+
+	if (!length $frag) {
+		_die("cannot decrypt without key in URL fragment");
+	}
+
+	my $password;
+	my $body;
+	my $data;
+
+	$body = get($url);
+
+	while ($body =~ /<div id="askpassword">/) {
+		if (-t 0) {
+			_debug("paste is password-protected");
+			$password = _prompt("password?");
+		} else {
+			_die("paste is password-protected");
+		}
+		$body = post($url, p => sha1_hex($password)) || return;
+	}
+
+	if ($body =~ /DOCTYPE/) {
+		$body =~ m{<input .+ id="data" value="(.+)" />}s || return;
+		$data = $1;
+	}
+	elsif ($body =~ /^\{/) {
+		$data = decode_json($body);
+		$data = $data->{data};
+	}
+
+	$data = decode_base64($data);
+	$data = unwrap_ezcrypt($data, $frag);
+	return $data;
+}
+
+sub dl_kopy {
+	my ($url, $frag) = @_;
+
+	my $body = get($url) // return;
+	$body = decode_json($body);
+
+	my $data = $body->{data};
+	if (($body->{security} // "") eq "encrypted") {
+		$data = decode_base64($data);
+		$data = unwrap_openssl_aes($data, $frag);
+	}
+	return $data;
+}
+
+sub dl_basic_cryptojs {
+	my ($url, $frag) = @_;
+
+	my $data = get($url) // return;
+	$data = decode_base64($data);
+	$data = unwrap_openssl_aes($data, $frag);
+	return $data;
+}
+
+sub dl_ncrypt {
+	my ($url, $frag) = @_;
+
+	my $body = post($url) // return;
+	$body = decode_json($body);
+
+	my $data = $body->{data};
+	$data = decode_base64($data);
+	$data = unwrap_ncrypt($data, $frag, $body->{cipher});
+	return $data;
+}
+
+sub dl_riseup {
+	eval {
+		require Crypt::Digest::SHA512;
+		require Crypt::AuthEnc::CCM;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::Digest::SHA512->import("sha512");
+	Crypt::AuthEnc::CCM->import("ccm_decrypt_verify");
+
+	my ($url, $frag) = @_;
+
+	# obtain file parameters
+
+	my $seed = decode_base64($frag);
+	$seed = sha512($seed);
+	my $key   = substr($seed,  0, 32);
+	my $iv    = substr($seed, 32, 16);
+	my $ident = substr($seed, 48, 16);
+	my $tlen  = 8; # tag size
+
+	# fetch and decrypt file
+
+	$ident = MIME::Base64::encode_base64url($ident);
+	my $body = get("https://share.riseup.net/i/$ident") // return;
+	$body =~ s/^UP1\0//; # optional anti-hotlink header
+	my $tag  = substr($body, -$tlen, $tlen, "");
+	$body = ccm_decrypt_verify("AES", $key, $iv, "", $body, $tag)
+		// _die("decryption failed");
+
+	# strip JSON header
+
+	if ($body =~ s/^(?:..)*\0\0//) {
+		my $header = decode("UTF-16", $&);
+		_debug("header: $header");
+	}
+
+	return $body;
+}
+
+sub dl_sour {
+	eval {
+		require Crypt::Digest::RIPEMD160;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::Digest::RIPEMD160->import("ripemd160");
+
+	my ($url, $frag) = @_;
+
+	my $body = get($url) // return;
+	my @body = split(/\n\n/, $body);
+
+	my %headers = map {/^(\S+):\s*(.*)$/} split(/\n/, $body[0]);
+	_debug("found header: $_='$headers{$_}'") for sort keys %headers;
+	if ($headers{chk}) {
+		my $k = decode_sour_base64($frag);
+		my $c = decode_sour_base64($headers{chk});
+		if (ripemd160($k) ne $c) {
+			_die("decryption failed (incorrect key)");
+		}
+	}
+	if (($headers{exp} // "") eq "burn_on_read") {
+		_warn("this paste is destroyed after first access (burn-on-read)");
+	}
+
+	my $data = decode_base64($body[1]);
+	$data = unwrap_openssl_aes($data, $frag);
+	if (lc($headers{zip} // "") eq "true") {
+		$data = decompress_gzip($data);
+	}
+	return $data;
+}
+
+sub dl_zerobin {
+	my ($url, $frag) = @_;
+
+	if (!length $frag) {
+		_die("cannot decrypt without key in URL fragment");
+	}
+
+	my $body = get($url) // return;
+	$body =~ m{<div id="cipherdata" [^>]+>(.+)</div>} || return;
+
+	my $data = decode_html($1);
+	$data = decode_json($data);
+	if (ref $data eq "ARRAY") {
+		$data = $data->[0]->{data};
+		$data = unwrap_sjcl($data, $frag);
+		$data = decode_base64($data);
+		$data = decompress_deflate($data);
+	} else {
+		$data = $data->{data};
+		$data = decode_json($data);
+		$data = unwrap_sjcl($data, $frag);
+		$data = decode_base64($data);
+		$data = decompress_deflate($data);
+	}
+	return $data;
+}
+
+# }}}
+# SITE DATABASE {{{
+#
+# - supported match fields:
+#     scheme, host, path, query, fragment
+#     ('host' includes the :port if any)
+#
+# - each match may be a "string literal", qr/regex literal/, or [array thereof],
+#
+# - each match field has a corresponding 'to_*' replacement field,
+#
+# - replacements may use #𝒏 (#0, #1–#9) to reference capture groups of same field,
+#   as well as #{field.𝒏} for capture groups of another field.
+
+@SITES = (
+	# generic (forced)
+	{
+		scheme => qr/^sour\+(.+)$/,
+		fragment => qr{^/(.+)!(.+)},
+		to_scheme => "#1",
+		to_path => "#{path.0}api/get/#{fragment.1}",
+		to_fragment => "#{fragment.2}",
+		parser => \&dl_sour,
+	},
+	{
+		scheme => qr/^zerobin\+(.+)$/,
+		to_scheme => "#1",
+		parser => \&dl_zerobin,
+	},
+	# domain
+	{
+		host => "0bin.net",
+		parser => \&dl_0bin,
+	},
+	{
+		host => "bpaste.net",
+		path => qr!^/\w+/(\w+)!,
+		to_path => "/raw/#1",
+	},
+	{
+		host => qr/^(dark-)?code\.bulix\.org$/,
+		to_query => "raw",
+	},
+	{
+		host => "codepad.org",
+		path => qr!^/\w+!,
+		to_path => "#0/raw.txt",
+	},
+	{
+		host => "cryptb.in",
+		parser => \&dl_cryptbin_do,
+	},
+	{
+		host => "cryptbin.com",
+		parser => \&dl_cryptbin_do,
+	},
+	{
+		host => "cryptobin.org",
+		parser => \&dl_cryptobin,
+	},
+	{
+		host => "paste.debian.net",
+		path => qr!^/(\d+)!,
+		to_path => "/plain/#1",
+	},
+	{
+		host => "defuse.ca",
+		parser => \&dl_defuse,
+	},
+	{
+		host => "dpaste.com",
+		path => qr!^/\w+!,
+		to_path => "#0.txt",
+	},
+	{
+		host => ["dpaste.org", "dpaste.de"],
+		path => qr!^/\w+!,
+		to_path => "#0/raw/",
+	},
+	{
+		host => "www.dropbox.com",
+		to_host => "dl.dropboxusercontent.com",
+	},
+	{
+		host => "ezcrypt.it",
+		parser => \&dl_ezcrypt,
+	},
+	{
+		host => ["fpaste.org", "paste.fedoraproject.org"],
+		to_path => "#0/raw",
+	},
+	{
+		host => "fpaste.org",
+		path => qr!^/\w+(?:/\d+)?!,
+		to_path => "#0/raw/",
+	},
+	{
+		host => "ghostbin.com",
+		path => qr!^/paste/\w+!,
+		to_path => "#0/raw",
+	},
+	{
+		host => "gist.github.com",
+		to_path => "#0.txt",
+	},
+	{
+		host => "hastebin.com",
+		path => qr!^/(\w+)!,
+		to_path => "/raw/#1",
+	},
+	{
+		host => ["irccloud.com", "www.irccloud.com"],
+		path => qr!^/pastebin/\w+!,
+		to_path => "#0.raw",
+	},
+	{
+		host => "kopy.io",
+		path => qr!^/(\w+)!,
+		to_path => "/documents/#1",
+		parser => \&dl_kopy,
+	},
+	{
+		host => "paste.lisp.org",
+		path => qr!^/display/\d+!,
+		to_path => "#0/raw",
+	},
+	{
+		host => "paste.lisp.org",
+		path => qr!^/\+!,
+		parser => \&dl_recursive,
+	},
+	{
+		host => "paste.lukej.me",
+		path => qr!^/(\w+)!,
+		to_path => "/raw/#1",
+		parser => \&dl_basic_cryptojs,
+	},
+	{
+		host => "pastebin.mozilla.org",
+		path => qr!^/(\d+)!,
+		to_path => "",
+		to_query => "dl=#{path.1}",
+	},
+	{
+		host => "ncry.pt",
+		path => qr!^/p/\w+!,
+		parser => \&dl_ncrypt,
+	},
+	{
+		host => "paste.opensuse.org",
+		path => qr!^/(\d+)!,
+		to_path => "/view/raw/#1",
+	},
+	{
+		host => "paste.ee",
+		path => qr!^/[pr]/(\w+)!,
+		to_path => "/r/#1",
+	},
+	{
+		host => "paste.sh",
+		to_path => "#0.txt",
+		parser => \&dl_dgl_pastesh,
+	},
+	{
+		host => ["pastebin.ca", "www.pastebin.ca"],
+		path => qr!^(?:/raw)?/(\d+)!,
+		to_path => "/raw/#1",
+	},
+	{
+		host => "pastebin.com",
+		path => qr!^(?:/index|/raw)?/(\w+)!,
+		to_path => "/raw/#1",
+	},
+	{
+		host => "pastebin.de",
+		path => qr!^/(\d+)!,
+		to_path => "/download/?id=#1",
+	},
+	{
+		host => "pastie.org",
+		path => qr!^(?:/pastes)?/(\d+)!,
+		to_path => "/pastes/#1/download",
+	},
+	{
+		host => "www.refheap.com",
+		path => qr!^/\d+!,
+		to_path => "#0/raw",
+	},
+	{
+		host => "share.riseup.net",
+		parser => \&dl_riseup,
+	},
+	{
+		host => "paste.scratchbook.ch",
+		path => qr!^/view/(\w+)$!,
+		to_path => "/view/raw/#1",
+	},
+#	{
+#		host => "paste.gnome.org",
+#		path => qr!^/\w+!,
+#		to_path => "#0/unpredictablestring/raw",
+#	},
+	{
+		host => "fpaste.scsys.co.uk",
+		path => qr!^/\d+!,
+		to_query => "tx=on",
+	},
+	{
+		host => "paste.dn42.us",
+		fragment => qr{^/(.+)!(.+)},
+		to_path => "#{path.0}api/get/#{fragment.1}",
+		to_fragment => "#{fragment.2}",
+		parser => \&dl_sour,
+	},
+	{
+		host => "sour.is",
+		path => "/paste/",
+		fragment => qr{^/(.+)!(.+)},
+		to_path => "#{path.0}api/get/#{fragment.1}",
+		to_fragment => "#{fragment.2}",
+		parser => \&dl_sour,
+	},
+	{
+		host => ["ix.io", "sprunge.us"],
+		path => qr!^/\w+!,
+		to_path => "#0",
+		to_query => "",
+	},
+	{
+		host => "termbin.com",
+	},
+	{
+		host => "vomitb.in",
+		path => qr!^/(\w+)!,
+		to_path => "/raw/#1",
+	},
+	{
+		host => ["ptpb.pw", "pb.gehidore.net"],
+		path => qr!^/([^/.]+)([/.].*)?!,
+		to_path => "/#1",
+	},
+	# generic (wild guess)
+	{
+		path => qr{/$},
+		fragment => qr{^/(\w{27})!(\w{32})$},
+		to_path => "#{path.0}api/get/#{fragment.1}",
+		to_fragment => "#{fragment.2}",
+		note => "probably a Sour.is site based on query & fragment",
+		parser => \&dl_sour,
+	},
+	{
+		query => qr/^[0-9a-f]{16}$/,
+		fragment => qr{^[0-9A-Za-z+/]{43}=$},
+		note => "probably a ZeroBin site based on query & fragment",
+		parser => \&dl_zerobin,
+	},
+);
+
+# }}}
+
+sub usage {
+	print "$_\n" for
+	"Usage: $::arg0 [-u] <url>",
+	"",                       #
+	"  -u, --show-url         Output only the URL of raw document",
+}
+
+GetOptions(
+	"help"		=> sub { usage(); exit; },
+	"batch"		=> \$opt_batch,
+	"check-deps"	=> \&check_deps,
+	"k|insecure"	=> \$opt_insecure,
+	"u|show-url"	=> \$opt_show_url,
+) or exit 2;
+
+if (!@ARGV) {
+	_die("missing URL", 2);
+}
+
+if ($opt_insecure) {
+	$UA->ssl_opts(verify_hostname => 0);
+}
+
+unless ($ENV{PERL_LWP_SSL_CA_FILE} || $ENV{HTTPS_CA_FILE}) {
+	$UA->ssl_opts(SSL_ca_file => "/etc/ssl/certs/ca-certificates.crt");
+}
+
+$UA->agent("Mozilla/4.0 getpaste/0.42 (http://nullroute.eu.org/) ".$UA->_agent);
+
+for (@ARGV) {
+	retrieve_paste($_);
+}
+
+exit $::errors;
+# vim: ts=8:sw=8:noet:fdm=marker

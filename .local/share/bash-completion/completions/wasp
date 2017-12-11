@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if ! declare -F _git > /dev/null && declare -F _completion_loader > /dev/null; then
+  _completion_loader git
+fi
+
+_wasp() {
+    local GIT_DIR="${ASPROOT:-/var/cache/asp}/.git"
+    export GIT_DIR
+
+    __git_wrap__git_main "$@"
+}
+
+complete -o bashdefault -o default -o nospace -F _wasp wasp
