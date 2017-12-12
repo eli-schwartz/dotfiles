@@ -1,0 +1,16 @@
+# XDG compliance
+XDG_CACHE_HOME   DEFAULT=@{HOME}/.cache
+XDG_CONFIG_HOME  DEFAULT=@{HOME}/.config
+XDG_DATA_HOME    DEFAULT=@{HOME}/.local/share
+
+EDITOR        DEFAULT=vim
+GCC_COLORS    DEFAULT=1
+
+# less/pager
+LESS          DEFAULT="-R --ignore-case --hilite-search"
+LESSOPEN      DEFAULT="| src-hilite-lesspipe.sh %s"
+# Systemd doesn't do the decent thing and respect this properly.
+SYSTEMD_LESS  DEFAULT="${LESS}"
+
+QT_STYLE_OVERRIDE    DEFAULT=Fusion
+QT_QPA_PLATFORMTHEME DEFAULT=gtk2

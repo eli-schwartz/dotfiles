@@ -18,6 +18,8 @@ Videos/
 .atom/
 .*cache/
 .gem/
+.*hist
+.*history
 .macromedia/
 .node-gyp/
 .npm/
@@ -26,14 +28,12 @@ Videos/
 .v8flags*
 
 # Misc commonly generated files
-.bash_history
 .bazaar/
 .dbus/
 .dropbox/
+.esd_auth
 .ICEauthority
 .lesshst
-.python_history
-.sqlite_history
 .subversion/
 .wine/
 .Xauthority
