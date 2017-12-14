@@ -2,7 +2,7 @@
 
 shopt -s extglob
 
-cd /var/cache/pacman/custom/
+cd /var/cache/pacman/custom
 
 act="add"
 force="-n"
@@ -38,12 +38,10 @@ else
     packages=(*.pkg.tar.xz)
 fi
 
-while IFS=  read -r -d $'\0'; do
-    spackages+=("$REPLY")
-done < <(printf "%s\0" "${packages[@]}"|sort -Vz)
+mapfile -td '' spackages < <(printf "%s\0" "${packages[@]}"|pacsort -zf)
 
 for pkg in "${spackages[@]}"; do
-    if [[ "${pkg}" =~ ^linux-?.* ]]; then
+    if [[ ${pkg} =~ ^linux-?.* ]]; then
         kernel_pkgs+=("${pkg}")
     else
         regular_pkgs+=("${pkg}")
