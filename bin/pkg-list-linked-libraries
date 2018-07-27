@@ -53,10 +53,10 @@ workdir="$(mktemp -d)"
 
 msg "checking linked libraries for ${pkgfile##*/} ..."
 bsdtar xf "$pkgfile" -C "$workdir"
-while read file; do
+while read -rd '' file; do
   liblist="$(objdump -p "$file" 2> /dev/null | grep -E "NEEDED\s+$2")"
   [[ -n "$liblist" ]] && printf "%s\n%s\n" "${file#$workdir}" "$liblist" && found=1
-done < <(find "$workdir" -type f)
+done < <(find "$workdir" -type f -print0 | sort -z)
 
 if [[ ! $found && -n $2 ]]; then
     error "No file in %s is linked to %s" "${pkgfile##*/}" "$2"
