@@ -71,3 +71,15 @@ cptpb ()
         fi;
     fi
 }
+
+# nvchecker wrapper for release checking
+nv() {
+    local cfg=$HOME/.config/nvchecker.ini
+    local act=${1:-checker}; shift
+
+    nv$act "$cfg" "$@"
+}
+
+aurdupes() {
+    comm -12 <(pacman -Sql core extra community multilib| sort) <(aurgrep '' | sort )
+}
