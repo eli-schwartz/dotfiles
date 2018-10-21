@@ -52,7 +52,7 @@ vactivate() {
 	local path=~/.venv/$1
 
 	if [[ ! -d $path ]]; then
-		python -m venv $path --prompt "venv: $1"
+		python -m venv "$path" --prompt "venv: $1"
 	fi
 	source "$path"/bin/activate; bash; deactivate
 }
