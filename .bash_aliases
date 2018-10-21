@@ -3,7 +3,7 @@ alias pgrep='pgrep -af'
 alias git=hub
 
 alias testing-repo-list='pacman --color=always -Sl {,community-}testing|grep -F "[installed]"'
-alias git-pr-setup='git config --local --add remote.origin.fetch '\''+refs/pull/*/head:refs/pull/*'\'''
+alias git-pr-setup="git config --local --add remote.origin.fetch '+refs/pull/*/head:refs/pull/*'"
 # Check for updates to git packages
 alias gitpkgs-refresh='(cd ~/git/pkgbuilds; for i in *-git/; do if [[ $i =~ (calibre|qbittorrent)-.* ]]; then true; else (cd $i && makepkg); fi; done)'
 alias gitpkgs-refresh-aur='(cd /var/aur/; for i in *-git/; do if [[ $i =~ (excludes)-.* ]]; then true; else (cd $i && makepkg); fi; done)'
