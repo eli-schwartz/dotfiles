@@ -14,6 +14,9 @@ live() {
 }
 
 load() {
+    if ! [ -f "$cache" ]; then
+        echo "error: no cache available" && exit 1
+    fi
     gzip -dc "$cache" | /usr/bin/ncdu -f- $opts
 }
 
