@@ -8,6 +8,10 @@ alias git-pr-setup='git config --local --add remote.origin.fetch '\''+refs/pull/
 alias gitpkgs-refresh='(cd ~/git/pkgbuilds; for i in *-git/; do if [[ $i =~ (calibre|qbittorrent)-.* ]]; then true; else (cd $i && makepkg); fi; done)'
 alias gitpkgs-refresh-aur='(cd /var/aur/; for i in *-git/; do if [[ $i =~ (excludes)-.* ]]; then true; else (cd $i && makepkg); fi; done)'
 
+# info sucks, use less instead
+info() {
+    command info "$@" | less
+}
 # Make diff like git-diff
 alias diff='git diff --no-index'
 # Super-simple AUR wrapper
