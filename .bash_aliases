@@ -9,9 +9,7 @@ alias gitpkgs-refresh='(cd ~/git/pkgbuilds; for i in *-git/; do if [[ $i =~ (cal
 alias gitpkgs-refresh-aur='(cd /var/aur/; for i in *-git/; do if [[ $i =~ (excludes)-.* ]]; then true; else (cd $i && makepkg); fi; done)'
 
 # Make diff like git-diff
-diff () {
-    colordiff "$@" | /usr/share/git/diff-highlight/diff-highlight | less -R
-}
+alias diff='git diff --no-index'
 # Super-simple AUR wrapper
 aurgen() {
     git clone aur:${1}
