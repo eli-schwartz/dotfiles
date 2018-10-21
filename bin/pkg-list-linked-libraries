@@ -41,7 +41,7 @@ esac
 if [[ -f "$1" ]]; then
     pkgfile="$1"
 else
-    pkgfile_remote="$(pacman -Sp "$1" 2>/dev/null)" || die "package name not in repos"
+    pkgfile_remote="$(pacman -Sddp "$1" 2>/dev/null)" || die "package name not in repos"
     pkgfile="/var/cache/pacman/pkg/${pkgfile_remote##*/}"
     if [[ ! -f "$pkgfile" ]]; then
         msg "Downloading package '%s' into pacman's cache" "$1"
