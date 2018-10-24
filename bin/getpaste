@@ -109,6 +109,7 @@ sub smart_match {
 		# (1,) in list context since it needs a trueish value.
 		# This bit of linenoise works consistently in all cases.
 		return map {substr($str, $-[$_], $+[$_]-$-[$_])} 0..$#-;
+		#return @{^CAPTURE}; # new in 5.26
 	}
 	elsif (ref($pattern) eq "" && $str eq $pattern) {
 		return $str;
@@ -345,7 +346,7 @@ sub try_decode_json {
 # }}}
 # decompressors {{{
 
-sub decompress_deflate {
+sub decompress_zlib {
 	eval {
 		require Compress::Raw::Zlib;
 	} or _die("missing Perl package 'Compress::Raw::Zlib'");
@@ -357,10 +358,25 @@ sub decompress_deflate {
 	my $status;
 	my $outbuf;
 
-	if ($opt{is_gzip}) {
+	if ($opt{is_gzip_or_zlib}) {
+		# autodetect RFC 1950 (zlib) or 1952 (gzip)
+		$wbits = Compress::Raw::Zlib->WANT_GZIP_OR_ZLIB;
+	}
+	elsif ($opt{is_gzip}) {
+		# expect RFC 1952 (gzip)
 		$wbits = Compress::Raw::Zlib->WANT_GZIP;
-	} else {
+	}
+	elsif ($opt{is_deflate}) {
+		# expect RFC 1951 (deflate)
 		$wbits = -Compress::Raw::Zlib->MAX_WBITS;
+	}
+	elsif ($opt{is_zlib}) {
+		# expect RFC 1950 (zlib)
+		$wbits = 15;
+	}
+	else {
+		# mirror the zlib default
+		$wbits = Compress::Raw::Zlib->MAX_WBITS;
 	}
 
 	($stream, $status) = Compress::Raw::Zlib::Inflate->new(-WindowBits => $wbits);
@@ -377,10 +393,16 @@ sub decompress_deflate {
 	return $outbuf;
 }
 
+sub decompress_deflate {
+	my ($buf) = @_;
+
+	return decompress_zlib($buf, is_deflate => 1);
+}
+
 sub decompress_gzip {
 	my ($buf) = @_;
 
-	return decompress_deflate($buf, is_gzip => 1);
+	return decompress_zlib($buf, is_gzip => 1);
 }
 
 sub decompress_lzw {
@@ -587,10 +609,12 @@ sub unwrap_openssl_aes {
 sub unwrap_sjcl {
 	eval {
 		require Crypt::AuthEnc::CCM;
+		require Crypt::AuthEnc::GCM;
 		require Crypt::KeyDerivation;
 	} or _die("missing Perl package 'CryptX'");
 
 	Crypt::AuthEnc::CCM->import(":all");
+	Crypt::AuthEnc::GCM->import(":all");
 	Crypt::KeyDerivation->import("pbkdf2");
 
 	# serialization: JSON
@@ -607,11 +631,14 @@ sub unwrap_sjcl {
 	if (($data->{cipher} //= "aes") ne "aes") {
 		_die("unsupported cipher ".$data->{cipher});
 	}
-	if (($data->{mode} //= "ccm") ne "ccm") {
-		_die("unsupported mode ".$data->{mode});
+
+	my $mode = $data->{mode} // "ccm";
+
+	unless ($mode eq "ccm" || $mode eq "gcm") {
+		_die("unsupported cipher mode ".$mode);
 	}
 
-	my $salt = decode_base64($data->{salt});
+	my $salt = decode_base64($data->{salt} // "");
 	my $ct   = decode_base64($data->{ct});
 	my $iv   = decode_base64($data->{iv});
 	my $iter = int($data->{iter} || 1000),
@@ -619,11 +646,17 @@ sub unwrap_sjcl {
 	my $ts   = int($data->{ts} || 64) / 8; # tag size
 	my $hdr  = decode_base64($data->{adata} // "");
 
-	my $key  = pbkdf2($passwd, $salt, $iter, "SHA256", $ks);
+	my $key  = $salt ? pbkdf2($passwd, $salt, $iter, "SHA256", $ks) : $passwd;
 	my $tag  = substr($ct, -$ts, $ts, "");
 
-	return ccm_decrypt_verify("AES", $key, $iv, $hdr, $ct, $tag)
-	       // _die("decryption failed");
+	if ($mode eq "ccm") {
+		return ccm_decrypt_verify("AES", $key, $iv, $hdr, $ct, $tag)
+		       // _die("decryption failed");
+	}
+	elsif ($mode eq "gcm") {
+		return gcm_decrypt_verify("AES", $key, $iv, $hdr, $ct, $tag)
+		       // _die("decryption failed");
+	}
 }
 
 # }}}
@@ -646,6 +679,23 @@ sub dl_0bin {
 	$data = unwrap_sjcl($data, $frag);
 	$data = decode_base64($data);
 	#$data = decompress_lzw($data);
+	return $data;
+}
+
+sub dl_nothingnet {
+	my ($url, $frag) = @_;
+
+	if (!length $frag) {
+		_die("cannot decrypt without key in URL fragment");
+	}
+	$frag =~ s/\$.*//;
+	$frag = decode_base64($frag);
+
+	my $body = get($url);
+	$body =~ m{>(\{".+\"\})<} || return;
+
+	my $data = decode_html($1);
+	$data = unwrap_sjcl($data, $frag);
 	return $data;
 }
 
@@ -894,8 +944,7 @@ sub dl_zerobin {
 	}
 
 	my $body = get($url) // return;
-	$body =~ m{<div id="cipherdata" [^>]+>(.+)</div>} || return;
-
+	$body =~ m{<div id="cipherdata"[^>]*>(.+)</div>} || return;
 	my $data = decode_html($1);
 	$data = decode_json($data);
 	if (ref $data eq "ARRAY") {
@@ -908,6 +957,9 @@ sub dl_zerobin {
 		$data = decode_json($data);
 		$data = unwrap_sjcl($data, $frag);
 		$data = decode_base64($data);
+		if ($body =~ /\bPrivateBin\b/) {
+			$data = decode("UTF-8", $data);
+		}
 		$data = decompress_deflate($data);
 	}
 	return $data;
@@ -933,7 +985,7 @@ sub dl_zerobin {
 		scheme => qr/^sour\+(.+)$/,
 		fragment => qr{^/(.+)!(.+)},
 		to_scheme => "#1",
-		to_path => "#{path.0}api/get/#{fragment.1}",
+		to_path => "#{path.0}/#{fragment.1}",
 		to_fragment => "#{fragment.2}",
 		parser => \&dl_sour,
 	},
@@ -1062,9 +1114,20 @@ sub dl_zerobin {
 		parser => \&dl_ncrypt,
 	},
 	{
+		host => "paste.nothing.net.nz",
+		parser => \&dl_nothingnet,
+	},
+	{
 		host => "paste.opensuse.org",
 		path => qr!^/(\d+)!,
 		to_path => "/view/raw/#1",
+	},
+	{
+		host => "paste.ee",
+		path => qr!^/[pr]/(\w+)!,
+		fragment => qr!.+!,
+		to_path => "/r/#1",
+		parser => \&dl_basic_cryptojs,
 	},
 	{
 		host => "paste.ee",
@@ -1097,6 +1160,11 @@ sub dl_zerobin {
 		to_path => "/pastes/#1/download",
 	},
 	{
+		host => "paste.pound-python.org",
+		path => qr!^/(?:show|raw)/(\w+)!,
+		to_path => "/raw/#1",
+	},
+	{
 		host => "www.refheap.com",
 		path => qr!^/\d+!,
 		to_path => "#0/raw",
@@ -1110,28 +1178,20 @@ sub dl_zerobin {
 		path => qr!^/view/(\w+)$!,
 		to_path => "/view/raw/#1",
 	},
-#	{
-#		host => "paste.gnome.org",
-#		path => qr!^/\w+!,
-#		to_path => "#0/unpredictablestring/raw",
-#	},
 	{
 		host => "fpaste.scsys.co.uk",
 		path => qr!^/\d+!,
 		to_query => "tx=on",
 	},
 	{
-		host => "paste.dn42.us",
-		fragment => qr{^/(.+)!(.+)},
-		to_path => "#{path.0}api/get/#{fragment.1}",
-		to_fragment => "#{fragment.2}",
-		parser => \&dl_sour,
+		host => "paste.xinu.at",
+		path => qr!^/\w+!,
+		to_path => "#0",
 	},
 	{
-		host => "sour.is",
-		path => "/paste/",
+		host => "paste.dn42.us",
 		fragment => qr{^/(.+)!(.+)},
-		to_path => "#{path.0}api/get/#{fragment.1}",
+		to_path => "#{path.0}/#{fragment.1}",
 		to_fragment => "#{fragment.2}",
 		parser => \&dl_sour,
 	},
@@ -1157,10 +1217,10 @@ sub dl_zerobin {
 	# generic (wild guess)
 	{
 		path => qr{/$},
-		fragment => qr{^/(\w{27})!(\w{32})$},
+		fragment => qr{^/(\w{27})!(\w{32,43})$},
 		to_path => "#{path.0}api/get/#{fragment.1}",
 		to_fragment => "#{fragment.2}",
-		note => "probably a Sour.is site based on query & fragment",
+		note => "probably a PasteBox/Sour.is site based on query & fragment",
 		parser => \&dl_sour,
 	},
 	{
@@ -1200,7 +1260,7 @@ unless ($ENV{PERL_LWP_SSL_CA_FILE} || $ENV{HTTPS_CA_FILE}) {
 	$UA->ssl_opts(SSL_ca_file => "/etc/ssl/certs/ca-certificates.crt");
 }
 
-$UA->agent("Mozilla/4.0 getpaste/0.42 (http://nullroute.eu.org/) ".$UA->_agent);
+$UA->agent("Mozilla/4.0 getpaste/0.42 (nullroute.eu.org)");
 
 for (@ARGV) {
 	retrieve_paste($_);
