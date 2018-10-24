@@ -34,7 +34,6 @@ export EDITOR=vim
 export CALIBRE_SHOW_DEPRECATION_WARNINGS=1
 export XDG_CONFIG_HOME=$HOME/.config
 export XDG_DATA_HOME=$HOME/.local/share
-export ASPROOT=/var/cache/asp/
 export GCC_COLORS=1
 # Disable WINE menu items.
 export WINEDLLOVERRIDES=winemenubuilder.exe=d
