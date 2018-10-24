@@ -1,9 +1,9 @@
 #!/bin/bash
 
-SOYUZ="https://mirror.pkgbuild.com"
-SOCACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/sogrep"
+SOLINKS_MIRROR="https://mirror.pkgbuild.com"
+SOCACHE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/sogrep"
 repos=('staging' 'testing' 'core' 'extra' 'community-staging' 'community-testing' 'community' 'gnome-unstable' 'kde-unstable')
-arches=('i686' 'x86_64')
+arches=('x86_64')
 
 
 recache() {
@@ -11,23 +11,23 @@ recache() {
 
     for repo in "${repos[@]}"; do
         for arch in "${arches[@]}"; do
-            rm -rf "$SOCACHE_DIR/$arch/$repo"
-            mkdir -p "$SOCACHE_DIR/$arch/$repo"
-            curl $SOYUZ/$repo/os/$arch/$repo.links.tar.gz | bsdtar -xf - -C "$SOCACHE_DIR/$arch/$repo"
+            rm -rf "${SOCACHE_DIR}/${arch}/${repo}"
+            mkdir -p "${SOCACHE_DIR}/${arch}/${repo}"
+            curl "${SOLINKS_MIRROR}/${repo}/os/${arch}/${repo}.links.tar.gz" | bsdtar -xf - -C "${SOCACHE_DIR}/${arch}/${repo}"
         done
     done
 }
 
 search() {
-    local repo="$1" arch lib="$2"
+    local repo=$1 arch lib=$2
 
     for arch in ${arches[@]}; do
-        db="$SOCACHE_DIR/$arch/$repo"
-        if [[ -d $db ]]; then
-            for i in $(grep -rl "${lib}" "${db}"); do
-	            pkg=$(basename $(dirname $i))
-	            echo ${pkg%-*-*}
-            done
+        db=${SOCACHE_DIR}/${arch}/${repo}/
+        if [[ -d ${db} ]]; then
+            while read -rd '' pkg; do
+                pkg=${pkg#${db}}
+                printf '%s\n' "${pkg%-*-*/links}"
+            done < <(grep -rlZ "${lib}" "${db}")
         fi
     done | sort -u
 }
