@@ -1,0 +1,45 @@
+#!/bin/bash
+
+source /usr/share/makepkg/srcinfo.sh
+source /usr/share/makepkg/util/parseopts.sh
+
+srcinfo_dest=/dev/stdout
+buildscript=PKGBUILD
+
+usage() {
+    cat <<- _EOF_
+		Usage: mksrcinfo [options]
+
+		mksrcinfo reads a PKGBUILD and writes an equivalent .SRCINFO.
+		The default PKGBUILD is expected to be in the current working directory
+		and the .SRCINFO is written by default to stdout.
+
+		Options:
+		    -h, --help              display this help message and exit
+		    -p, --pkgbuild <file>   Read from <file> instead of PKGBUILD
+		    -o, --output <file>     write output to <file>
+_EOF_
+}
+
+OPT_SHORT='p:o:h'
+OPT_LONG=('pkgbuild:' 'output:' 'help')
+
+if ! parseopts "$OPT_SHORT" "${OPT_LONG[@]}" -- "$@"; then
+    exit 1
+fi
+set -- "${OPTRET[@]}"
+unset OPT_SHORT OPT_LONG OPTRET
+
+while true; do
+    case $1 in
+        -p|--pkgbuild)  shift; buildscript=$1;;
+        -o|--output)    shift; srcinfo_dest=$1;;
+        -h|--help)      usage; exit 0;;
+        --)             shift; break 2;;
+    esac
+    shift
+done
+
+source "$buildscript"
+
+write_srcinfo_content > "$srcinfo_dest"
