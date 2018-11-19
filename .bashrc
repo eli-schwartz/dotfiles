@@ -26,6 +26,9 @@ shopt -s histappend     # Don't overwrite
 # Don't mangle resized windows.
 shopt -s checkwinsize
 
+# I never use this and it breaks double-quoted "!" in weird and bizarre ways.
+set +o histexpand
+
 # Search repos for unknown commands.
 . /usr/share/doc/pkgfile/command-not-found.bash
 
