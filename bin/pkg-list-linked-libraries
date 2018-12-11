@@ -42,10 +42,12 @@ if [[ -f "$1" ]]; then
     pkgfile="$1"
 else
     pkgfile_remote="$(pacman -Sddp "$1" 2>/dev/null)" || die "package name not in repos"
-    pkgfile="/var/cache/pacman/pkg/${pkgfile_remote##*/}"
+    pkgfile="${pkgfile_remote#file://}"
     if [[ ! -f "$pkgfile" ]]; then
         msg "Downloading package '%s' into pacman's cache" "$1"
         sudo pacman -Swdd --logfile /dev/null "$1" || exit 1
+        pkgfile_remote="$(pacman -Sddp "$1" 2>/dev/null)"
+        pkgfile="${pkgfile_remote#file://}"
     fi
 fi
 
