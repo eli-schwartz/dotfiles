@@ -8,15 +8,37 @@ colorize
 
 usage() {
     cat <<- _EOF_
-		Usage: pkg-list-linked-libraries PACKAGE [LIBNAME]
+		Usage: pkg-list-linked-libraries [-s] PACKAGE [LIBNAME|SYMBOL]
 
-		Check a package to see what libraries it links against.
+		Check a package to see what libraries or symbols it links against.
 		Alternatively check against a specific library.
 
 		If PACKAGE is not an existing file, pacman will resolve it
 		as a package name and attempt to download it to the cache.
 		This respects repo/pkgname syntax.
+
+		OPTIONS
+		    -s, --symbols   Show symbols instead of libraries
+		    -h, --help      Show this help text
 _EOF_
+}
+
+checklibs() {
+    msg "checking linked libraries for ${pkgfile##*/} ..."
+    while read -rd '' file; do
+        liblist="$(objdump -p "$file" 2> /dev/null | grep -E "NEEDED\s+$1")"
+        [[ -n "$liblist" ]] && printf "%s\n%s\n" "${file#$workdir}" "$liblist" && found=1
+    done
+    [[ $found ]]
+}
+
+checksyms() {
+    msg "checking linked symbols for ${pkgfile##*/} ..."
+    while read -rd '' file; do
+        liblist="$(nm --with-symbol-versions -D "$file" 2>/dev/null | awk 'NF>1 && $NF ~ /'"$1"'/{printf "\t%s\n",$NF}')"
+        [[ -n "$liblist" ]] && printf "%s\n%s\n" "${file#$workdir}" "$liblist" && found=1
+    done
+    [[ $found ]]
 }
 
 die() {
@@ -31,7 +53,13 @@ clean_up() {
 }
 trap 'clean_up' EXIT
 
+func=checklibs
+
 case $1 in
+    -s|--symbols)
+        func=checksyms
+        shift
+        ;;
     -h|--help)
         usage
         exit
@@ -52,16 +80,13 @@ else
 fi
 
 workdir="$(mktemp -d)"
-
-msg "checking linked libraries for ${pkgfile##*/} ..."
 bsdtar xf "$pkgfile" -C "$workdir"
-while read -rd '' file; do
-  liblist="$(objdump -p "$file" 2> /dev/null | grep -E "NEEDED\s+$2")"
-  [[ -n "$liblist" ]] && printf "%s\n%s\n" "${file#$workdir}" "$liblist" && found=1
-done < <(find "$workdir" -type f -print0 | sort -z)
+find "$workdir" -type f -print0 | sort -z | $func "$2"
 
-if [[ ! $found && -n $2 ]]; then
+(( $? == 0 )) && exit 0
+
+if [[ -n $2 ]]; then
     error "No file in %s is linked to %s" "${pkgfile##*/}" "$2"
-elif [[ ! $found ]]; then
+else
     error "Uhhh... nothing in %s links to anything whatsoever..." "${pkgfile##*/}"
 fi
