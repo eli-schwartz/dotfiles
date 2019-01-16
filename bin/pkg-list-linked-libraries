@@ -90,3 +90,4 @@ if [[ -n $2 ]]; then
 else
     error "Uhhh... nothing in %s links to anything whatsoever..." "${pkgfile##*/}"
 fi
+exit 1
