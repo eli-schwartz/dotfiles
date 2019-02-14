@@ -1,7 +1,7 @@
 #!/bin/bash
 
-SOLINKS_MIRROR="https://mirror.pkgbuild.com"
-SOCACHE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/sogrep"
+: ${SOLINKS_MIRROR:="https://mirror.pkgbuild.com"}
+: ${SOCACHE_DIR:="${XDG_CACHE_HOME:-${HOME}/.cache}/sogrep"}
 repos=('staging' 'testing' 'core' 'extra' 'community-staging' 'community-testing' 'community' 'gnome-unstable' 'kde-unstable')
 arches=('x86_64')
 
