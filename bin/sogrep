@@ -21,15 +21,20 @@ recache() {
 search() {
     local repo=$1 arch lib=$2
 
-    for arch in ${arches[@]}; do
-        db=${SOCACHE_DIR}/${arch}/${repo}/
-        if [[ -d ${db} ]]; then
-            while read -rd '' pkg; do
-                pkg=${pkg#${db}}
-                printf '%s\n' "${pkg%-*-*/links}"
-            done < <(grep -rlZ "${lib}" "${db}")
-        fi
-    done | sort -u
+    if [[ $repo != all ]]; then
+        local repos=("${repo}")
+    fi
+    for arch in "${arches[@]}"; do
+        for repo in "${repos[@]}"; do
+            db=${SOCACHE_DIR}/${arch}/${repo}/
+            if [[ -d ${db} ]]; then
+                while read -rd '' pkg; do
+                    pkg=${pkg#${db}}
+                    printf '%s/%s\n' "${repo}" "${pkg%-*-*/links}"
+                done < <(grep -rlZ "${lib}" "${db}")
+            fi
+        done
+     done | sort -u
 }
 
 case $1 in
