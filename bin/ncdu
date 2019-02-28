@@ -1,28 +1,29 @@
-#!/bin/sh
+#!/bin/bash
 
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/ncdu.dump.gz"
-opts="-x --confirm-quit /"
+opts=(-x --confirm-quit /)
 
-set -e
+set -o pipefail
+
 dump() {
-    /usr/bin/ncdu -o- $opts | gzip > "$cache.tmp"
-    mv -f "$cache.tmp" "$cache"
+    /usr/bin/ncdu -o- "${opts[@]}" | gzip > "$cache.tmp" \
+        && mv -f "$cache.tmp" "$cache"
 }
 
 live() {
-    /usr/bin/ncdu $opts
+    exec /usr/bin/ncdu "${opts[@]}"
 }
 
 load() {
-    if ! [ -f "$cache" ]; then
+    if ! [[ -f $cache ]]; then
         echo "error: no cache available" && exit 1
     fi
-    gzip -dc "$cache" | /usr/bin/ncdu -f- $opts
+    gzip -dc "$cache" | exec /usr/bin/ncdu -f- "${opts[@]}"
 }
 
 case $1 in
     dump)   dump;;
     load)   load;;
     live)   live;;
-    *)      /usr/bin/ncdu "$@"
+    *)      exec /usr/bin/ncdu "$@"
 esac
