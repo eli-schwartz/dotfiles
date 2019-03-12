@@ -31,7 +31,9 @@ search() {
             echo "Try '${BASH_SOURCE[0]##*/} --help' for more information."
             exit 1
         fi
-        local repos=("${repo}")
+        local srepos=("${repo}")
+    else
+        local srepos=("${repos[@]}")
     fi
 
     if [[ ! -d ${SOCACHE_DIR} ]]; then
@@ -39,7 +41,7 @@ search() {
     fi
 
     for arch in "${arches[@]}"; do
-        for repo in "${repos[@]}"; do
+        for repo in "${srepos[@]}"; do
             db=${SOCACHE_DIR}/${arch}/${repo}/
             if [[ -d ${db} ]]; then
                 while read -rd '' pkg; do
