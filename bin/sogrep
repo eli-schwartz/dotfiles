@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# globals
 : ${SOLINKS_MIRROR:="https://mirror.pkgbuild.com"}
 : ${SOCACHE_DIR:="${XDG_CACHE_HOME:-${HOME}/.cache}/sogrep"}
 repos=('staging' 'testing' 'core' 'extra'
@@ -8,22 +9,27 @@ repos=('staging' 'testing' 'core' 'extra'
        'gnome-unstable' 'kde-unstable')
 arches=('x86_64')
 
+# options
+VERBOSE=0
+
 source /usr/share/makepkg/util/util.sh
 
 recache() {
-    local repo arch
+    local repo arch verbosity=-s
+
+    (( VERBOSE )) && verbosity=--progress-bar
 
     for repo in "${repos[@]}"; do
         for arch in "${arches[@]}"; do
             rm -rf "${SOCACHE_DIR}/${arch}/${repo}"
             mkdir -p "${SOCACHE_DIR}/${arch}/${repo}"
-            curl "${SOLINKS_MIRROR}/${repo}/os/${arch}/${repo}.links.tar.gz" | bsdtar -xf - -C "${SOCACHE_DIR}/${arch}/${repo}"
+            curl "$verbosity" "${SOLINKS_MIRROR}/${repo}/os/${arch}/${repo}.links.tar.gz" | bsdtar -xf - -C "${SOCACHE_DIR}/${arch}/${repo}"
         done
     done
 }
 
 search() {
-    local repo=$1 arch lib=$2
+    local repo=$1 arch lib=$2 srepos=("${repos[@]}")
 
     if [[ $repo != all ]]; then
         if ! in_array "$repo" "${repos[@]}"; then
@@ -31,9 +37,7 @@ search() {
             echo "Try '${BASH_SOURCE[0]##*/} --help' for more information."
             exit 1
         fi
-        local srepos=("${repo}")
-    else
-        local srepos=("${repos[@]}")
+        srepos=("${repo}")
     fi
 
     if [[ ! -d ${SOCACHE_DIR} ]]; then
@@ -42,15 +46,24 @@ search() {
 
     for arch in "${arches[@]}"; do
         for repo in "${srepos[@]}"; do
+            local prefix=
+            (( VERBOSE && ${#srepos[@]} > 1 )) && prefix=${repo}/
             db=${SOCACHE_DIR}/${arch}/${repo}/
             if [[ -d ${db} ]]; then
                 while read -rd '' pkg; do
+                    read -r match
                     pkg=${pkg#${db}}
-                    printf '%s/%s\n' "${repo}" "${pkg%-*-*/links}"
-                done < <(grep -rlZ "${lib}" "${db}")
+                    pkg="${prefix}${pkg%-*-*/links}"
+
+                    if (( VERBOSE )); then
+                        printf '%-35s %s\n' "${pkg}" "${match}"
+                    else
+                        printf '%s\n' "${pkg}"
+                    fi
+                done < <(grep -rZ "${lib}" "${db}") | sort -u
             fi
         done
-     done | sort -u
+    done | resort
 }
 
 usage() {
@@ -65,10 +78,14 @@ usage() {
 		If the links database does not exist, it will be downloaded first.
 
 		OPTIONS
+		    -v, --verbose   Show matched links in addition to pkgname
 		    -r, --refresh   Refresh the links databases
 		    -h, --help      Show this help text
 _EOF_
 }
+
+# utility function to resort with multiple repos + no-verbose
+resort() { sort -u; }
 
 if (( $# == 0 )); then
     echo "error: No arguments passed."
@@ -78,6 +95,10 @@ fi
 
 while (( $# )); do
     case $1 in
+        -v|--verbose)
+            resort() { cat; }
+            VERBOSE=1
+            ;;
         -r|--refresh)
             recache
             ;;
