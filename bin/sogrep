@@ -10,8 +10,10 @@ repos=('staging' 'testing' 'core' 'extra'
 arches=('x86_64')
 
 # options
+REFRESH=0
 VERBOSE=0
 
+source /usr/share/makepkg/util/parseopts.sh
 source /usr/share/makepkg/util/util.sh
 
 recache() {
@@ -38,10 +40,6 @@ search() {
             exit 1
         fi
         srepos=("${repo}")
-    fi
-
-    if [[ ! -d ${SOCACHE_DIR} ]]; then
-        recache
     fi
 
     for arch in "${arches[@]}"; do
@@ -92,29 +90,41 @@ if (( $# == 0 )); then
     echo "Try '${BASH_SOURCE[0]##*/} --help' for more information."
     exit 1
 fi
+OPT_SHORT='vrh'
+OPT_LONG=(verbose refresh help)
+if ! parseopts "$OPT_SHORT" "${OPT_LONG[@]}" -- "$@"; then
+    exit 1
+fi
+set  -- "${OPTRET[@]}"
 
-while (( $# )); do
+while :; do
     case $1 in
         -v|--verbose)
             resort() { cat; }
             VERBOSE=1
             ;;
         -r|--refresh)
-            recache
+            REFRESH=1
             ;;
         -h|--help)
             usage
             exit 0
             ;;
-        *)
-            if (( $# < 2 )); then
-                echo "error: Not enough arguments passed."
-                echo "Try '${BASH_SOURCE[0]##*/} --help' for more information."
-                exit 1
-            fi
-            search "$@"
-            exit $?
+        --)
+            shift; break
             ;;
     esac
     shift
 done
+
+if (( ! REFRESH && $# < 1 )); then
+    echo "error: Not enough arguments passed."
+    echo "Try '${BASH_SOURCE[0]##*/} --help' for more information."
+    exit 1
+fi
+
+if (( REFRESH )) || [[ ! -d ${SOCACHE_DIR} ]]; then
+    recache
+fi
+
+search "$@"
