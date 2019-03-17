@@ -34,7 +34,7 @@ search() {
     local repo=$1 arch lib=$2 srepos=("${repos[@]}")
 
     if [[ $repo != all ]]; then
-        if ! in_array "$repo" "${repos[@]}"; then
+        if ! in_array "${repo}" "${repos[@]}"; then
             echo "${BASH_SOURCE[0]##*/}: unrecognized repo '$repo'"
             echo "Try '${BASH_SOURCE[0]##*/} --help' for more information."
             exit 1
@@ -68,7 +68,7 @@ usage() {
     cat <<- _EOF_
 		Usage: ${BASH_SOURCE[0]##*/} [OPTIONS] REPO LIBNAME
 
-		Check the soname links database for pacman repositories containing
+		Check the soname links database for Arch Linux repositories containing
 		packages linked to a given shared library. If the repository specified
 		is "all", then all repositories will be searched, otherwise only the
 		named repository will be searched.
@@ -91,7 +91,7 @@ if (( $# == 0 )); then
     exit 1
 fi
 OPT_SHORT='vrh'
-OPT_LONG=(verbose refresh help)
+OPT_LONG=('verbose' 'refresh' 'help')
 if ! parseopts "$OPT_SHORT" "${OPT_LONG[@]}" -- "$@"; then
     exit 1
 fi
@@ -117,14 +117,15 @@ while :; do
     shift
 done
 
-if (( ! REFRESH && $# < 1 )); then
-    echo "error: Not enough arguments passed."
+if ! (( ( REFRESH && $# == 0 ) || $# == 2 )); then
+    echo "error: Incorrect number of arguments passed."
     echo "Try '${BASH_SOURCE[0]##*/} --help' for more information."
     exit 1
 fi
 
 if (( REFRESH )) || [[ ! -d ${SOCACHE_DIR} ]]; then
     recache
+    (( $# == 2 )) || exit 0
 fi
 
 search "$@"
