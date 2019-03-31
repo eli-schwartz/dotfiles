@@ -21,7 +21,7 @@ case $1 in
         ;;
 esac
 
-download_url="$(curl -s https://addons.mozilla.org/en-us/firefox/addon/$extension/versions/|grep 'downloads/file'|tac|tee $all_versions|tail -1)"
+download_url=$(curl "https://addons.mozilla.org/api/v3/addons/addon/$extension/"| jq -r '.current_version.files | .[].url')
 file="$(echo "$download_url"|sed -r 's@.*file/([0-9]+)/.*@\1@g')"
 version="$(echo "$download_url"|sed -r 's@.*'$filename'-([0-9.]+)-.*@\1@g')"
 
