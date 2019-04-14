@@ -27,7 +27,8 @@ people, but the mainly interesting things are some scripts in `~/bin`.
 
 - `sogrep` -- Grep the entire Arch repositories to see which packages link to a
   given soname. Basically a clone of another tool provided on
-  https://pkgbuild.com, but doesn't require a shell account.
+  https://pkgbuild.com, but doesn't require a shell account. Now part of
+  devtools proper: `pacman -S devtools`.
 
 - `cleanfiles.sh` -- You know that feeling you get when your files are full of
   trailing whitespace? This can "clean" that up, recursively.
