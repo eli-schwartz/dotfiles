@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# There are two issues with building packages targeted at parabola, and both
+# have the same fundamental cause: pkgrel is often ending in ".par1" which
+# makepkg does not allow.
+#
+# In order to adapt to this, you need a copy of makepkg with this patch:
+# https://git.parabola.nu/abslibre.git/tree/libre/pacman/0001-makepkg-Treat-pkgrel-more-similarly-to-pkgver.patch?id=6af3b6469459012f1c71117c45959ff3d836103c
+#
+# This is firstly installed into /opt/makepkg-parabola in order to let
+# makechrootpkg download sources. Second, it must also be installed as a pacman
+# package into a custom build chroot, hence archbuild -r.
+
+PATH="/opt/makepkg-parabola/bin:$PATH"
+
+sudo env PATH="$PATH" extra-x86_64-build -r /var/lib/archbuild/parabola "$@"
