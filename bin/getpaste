@@ -9,7 +9,7 @@ use warnings;
 use strict;
 no locale;
 use open qw(:std :utf8);
-use Encode qw(decode);
+use Encode qw(decode encode);
 use Getopt::Long qw(:config bundling no_ignore_case);
 use JSON;
 use LWP::UserAgent;
@@ -23,12 +23,13 @@ my $opt_batch = 0;
 
 BEGIN {
 	if (eval {require Nullroute::Lib}) {
-		Nullroute::Lib->import(qw(_debug _warn _err _die));
+		Nullroute::Lib->import(qw(_trace _debug _warn _err _die));
 	} else {
 		$::arg0 = (split m!/!, $0)[-1];
 		$::debug = !!$ENV{DEBUG};
 		$::warnings = 0;
 		$::errors = 0;
+		sub _trace { warn "trace: @_\n" if $::debug; }
 		sub _debug { warn "debug: @_\n" if $::debug; }
 		sub _warn  { warn "warning: @_\n"; ++$::warnings; }
 		sub _err   { warn "error: @_\n"; ! ++$::errors; }
@@ -301,6 +302,36 @@ sub follow {
 # }}}
 # decoders {{{
 
+sub decode_base58 {
+	my ($str, $alpha) = @_;
+	# Source: https://metacpan.org/pod/Encode::Base58
+
+	use bigint;
+	use integer;
+
+	my @alpha = split(//, $alpha);
+	my $i = 0;
+	my %alpha = map { $_ => $i++ } @alpha;
+
+	my $decoded = 0;
+	my $multi   = 1;
+	my $base    = @alpha;
+
+	while (length $str > 0) {
+		my $digit = chop $str;
+		$decoded += $multi * $alpha{$digit};
+		$multi   *= $base;
+	}
+
+	return $decoded->to_bytes;
+}
+
+sub decode_privatebin_base58 {
+	my ($str) = @_;
+
+	return decode_base58($str, "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz");
+}
+
 sub decode_sour_base64 {
 	my ($str) = @_;
 
@@ -361,22 +392,27 @@ sub decompress_zlib {
 	if ($opt{is_gzip_or_zlib}) {
 		# autodetect RFC 1950 (zlib) or 1952 (gzip)
 		$wbits = Compress::Raw::Zlib->WANT_GZIP_OR_ZLIB;
+		_trace("using WindowBits = $wbits (WANT_GZIP_OR_ZLIB, detect 1950/1952)");
 	}
 	elsif ($opt{is_gzip}) {
 		# expect RFC 1952 (gzip)
 		$wbits = Compress::Raw::Zlib->WANT_GZIP;
+		_trace("using WindowBits = $wbits (WANT_GZIP, expect 1952)");
 	}
 	elsif ($opt{is_deflate}) {
 		# expect RFC 1951 (deflate)
 		$wbits = -Compress::Raw::Zlib->MAX_WBITS;
+		_trace("using WindowBits = $wbits (-MAX_WBITS, expect 1951 deflate)");
 	}
 	elsif ($opt{is_zlib}) {
 		# expect RFC 1950 (zlib)
 		$wbits = 15;
+		_trace("using WindowBits = $wbits (expect 1950 zlib)");
 	}
 	else {
 		# mirror the zlib default
 		$wbits = Compress::Raw::Zlib->MAX_WBITS;
+		_trace("using WindowBits = $wbits (MAX_WBITS, default)");
 	}
 
 	($stream, $status) = Compress::Raw::Zlib::Inflate->new(-WindowBits => $wbits);
@@ -413,6 +449,32 @@ sub decompress_lzw {
 	my ($buf) = @_;
 
 	return Compress::LZW->decompress($buf);
+}
+
+sub decompress_inflate {
+	my ($buf) = @_;
+
+	require IO::Uncompress::Inflate;
+	my $outbuf;
+	my $stream = IO::Uncompress::Inflate->new(\$buf);
+	my $status = $stream->read($outbuf);
+	if ($status <= 0) {
+		_die("inflate failed: $IO::Uncompress::Inflate::InflateError");
+	}
+	return $outbuf;
+}
+
+sub decompress_rawinflate {
+	my ($buf) = @_;
+
+	require IO::Uncompress::RawInflate;
+	my $outbuf;
+	my $stream = IO::Uncompress::RawInflate->new(\$buf);
+	my $status = $stream->read($outbuf);
+	if ($status <= 0) {
+		_die("inflate failed: $IO::Uncompress::RawInflate::RawInflateError");
+	}
+	return $outbuf;
 }
 
 # }}}
@@ -604,6 +666,66 @@ sub unwrap_openssl_aes {
 	_debug("iv: <".encode_hex($iv).">");
 
 	return Crypt::Mode::CBC->new("AES")->decrypt($data, $key, $iv);
+}
+
+sub unwrap_privatebin_v2 {
+	eval {
+		require Crypt::AuthEnc::GCM;
+		require Crypt::KeyDerivation;
+	} or _die("missing Perl package 'CryptX'");
+
+	Crypt::AuthEnc::GCM->import(":all");
+	Crypt::KeyDerivation->import("pbkdf2");
+
+	# serialization: JSON
+	# key derivation: PBKDF2-SHA256
+	# encryption: AES256-GCM
+
+	my ($data, $passwd) = @_;
+
+	if ($data->{v} != 2) {
+		_die("incorrect paste format version ".$data->{v});
+	}
+
+	my $cparams = $data->{adata}->[0];
+	my $ct     = decode_base64($data->{ct});
+	my $iv     = decode_base64($cparams->[0]);
+	my $salt   = decode_base64($cparams->[1]);
+	my $iter   = $cparams->[2];
+	my $ks     = $cparams->[3] / 8;
+	my $ts     = $cparams->[4] / 8;
+	my $cipher = $cparams->[5];
+	my $mode   = $cparams->[6];
+	my $comp   = $cparams->[7];
+
+	unless ($cipher eq "aes") {
+		_die("unsupported cipher ".$cipher);
+	}
+	unless ($mode eq "gcm") {
+		_die("unsupported cipher mode ".$mode);
+	}
+	unless ($comp eq "zlib") {
+		_die("unsupported compression ".$comp);
+	}
+
+	my $ikey = decode_privatebin_base58($passwd);
+	my $dkey = pbkdf2($ikey, $salt, $iter, "SHA256", $ks);
+
+	# note that this relies on the encoder producing the most compact output
+	# (or more precisely, behaving like JSON.stringify() in JavaScript)
+	my $hdr = encode_json($data->{adata});
+	my $tag = substr($ct, -$ts, $ts, "");
+
+	if ($mode eq "gcm") {
+		$data = gcm_decrypt_verify("AES", $dkey, $iv, $hdr, $ct, $tag)
+		       // _die("decryption failed");
+	}
+	if ($comp eq "zlib") {
+		$data = decompress_deflate($data);
+	}
+	$data = decode_json($data)->{paste};
+
+	return $data;
 }
 
 sub unwrap_sjcl {
@@ -864,6 +986,35 @@ sub dl_ncrypt {
 	return $data;
 }
 
+sub dl_privatebin {
+	my ($url, $frag) = @_;
+
+	# Trick the server into returning the JSON blob
+	$UA->default_header("X-Requested-With" => "JSONHttpRequest");
+
+	my $body = get($url) // return;
+	$body = decode_json($body);
+
+	if ($body->{v} == 2) {
+		my $data = $body;
+		$data = unwrap_privatebin_v2($data, $frag);
+		return $data;
+	}
+	elsif ($body->{data}) {
+		my $data = $body->{data} // $body;
+		$data = unwrap_sjcl($data, $frag);
+		$data = decode_base64($data);
+		# The example code that comes with js-deflate mistakenly encodes binary
+		# data as UTF-8, and of course PrivateBin just used it verbatim.
+		$data = encode("latin1", decode("utf-8", $data));
+		$data = decompress_deflate($data);
+		return $data;
+	}
+	else {
+		_die("unrecognized PrivateBin format (did they change things up again?)");
+	}
+}
+
 sub dl_riseup {
 	eval {
 		require Crypt::Digest::SHA512;
@@ -944,21 +1095,29 @@ sub dl_zerobin {
 	}
 
 	my $body = get($url) // return;
+	if ($body =~ /\bprivatebin\.js/) {
+		# recent PrivateBin versions have a different API
+		_debug("redirecting to PrivateBin handler");
+		goto &dl_privatebin;
+	}
 	$body =~ m{<div id="cipherdata"[^>]*>(.+)</div>} || return;
 	my $data = decode_html($1);
 	$data = decode_json($data);
 	if (ref $data eq "ARRAY") {
+		# early ZeroBin
 		$data = $data->[0]->{data};
 		$data = unwrap_sjcl($data, $frag);
 		$data = decode_base64($data);
 		$data = decompress_deflate($data);
 	} else {
+		# later ZeroBin and early PrivateBin
 		$data = $data->{data};
 		$data = decode_json($data);
 		$data = unwrap_sjcl($data, $frag);
 		$data = decode_base64($data);
 		if ($body =~ /\bPrivateBin\b/) {
-			$data = decode("UTF-8", $data);
+			# (see comment in dl_privatebin)
+			$data = decode("utf-8", $data);
 		}
 		$data = decompress_deflate($data);
 	}
@@ -988,6 +1147,11 @@ sub dl_zerobin {
 		to_path => "#{path.0}/#{fragment.1}",
 		to_fragment => "#{fragment.2}",
 		parser => \&dl_sour,
+	},
+	{
+		scheme => qr/^privatebin\+(.+)$/,
+		to_scheme => "#1",
+		parser => \&dl_privatebin,
 	},
 	{
 		scheme => qr/^zerobin\+(.+)$/,
@@ -1081,6 +1245,10 @@ sub dl_zerobin {
 		to_path => "#0.raw",
 	},
 	{
+		host => "paste.joseng.de",
+		parser => \&dl_privatebin,
+	},
+	{
 		host => "kopy.io",
 		path => qr!^/(\w+)!,
 		to_path => "/documents/#1",
@@ -1165,6 +1333,10 @@ sub dl_zerobin {
 		to_path => "/raw/#1",
 	},
 	{
+		host => "privatebin.net",
+		parser => \&dl_privatebin,
+	},
+	{
 		host => "www.refheap.com",
 		path => qr!^/\d+!,
 		to_path => "#0/raw",
@@ -1210,7 +1382,7 @@ sub dl_zerobin {
 		to_path => "/raw/#1",
 	},
 	{
-		host => ["ptpb.pw", "pb.gehidore.net"],
+		host => "ptpb.pw",
 		path => qr!^/([^/.]+)([/.].*)?!,
 		to_path => "/#1",
 	},
