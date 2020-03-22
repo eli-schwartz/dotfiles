@@ -13,4 +13,5 @@ _prependpath() {
     esac
 }
 
+_prependpath "$HOME/.local/bin"
 _prependpath "$HOME/bin"
