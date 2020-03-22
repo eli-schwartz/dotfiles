@@ -73,7 +73,11 @@ else
     pkgfile="${pkgfile_remote#file://}"
     if [[ ! -f "$pkgfile" ]]; then
         msg "Downloading package '%s' into pacman's cache" "$1"
-        sudo pacman -Swdd --logfile /dev/null "$1" || exit 1
+        if command -v pacman-downloadonly >/dev/null; then
+            echo "$1" | sudo pacman-downloadonly -d || exit 1
+        else
+            sudo pacman -Swdd --noconfirm --logfile /dev/null "$1" || exit 1
+        fi
         pkgfile_remote="$(pacman -Sddp "$1" 2>/dev/null)"
         pkgfile="${pkgfile_remote#file://}"
     fi
