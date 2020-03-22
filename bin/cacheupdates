@@ -98,18 +98,19 @@ fi
 mkdir -p "$CHECKUPDATES_DB"
 ln -s "${DBPath}/local" "$CHECKUPDATES_DB" &> /dev/null
 if ! fakeroot -- pacman -Sy --dbpath "$CHECKUPDATES_DB" --logfile /dev/null &> /dev/null; then
-       error 'Cannot fetch updates'
-       exit 1
+	error 'Cannot fetch updates'
+	exit 1
 fi
 mapfile -t updates < <(pacman -Qu --dbpath "$CHECKUPDATES_DB" 2> /dev/null | grep -v '\[.*\]')
 
-printf '%s\n' "${updates[@]}"
-
-updates=($(pacman -Qqu --dbpath "$CHECKUPDATES_DB" 2> /dev/null))
-if (( DOWNLOAD_CACHE && ${#updates[@]} > 0 )); then
-	sudo pacman -Sw --noconfirm "${updates[@]}" --dbpath "$CHECKUPDATES_DB" --logfile /dev/null
+if (( ${#updates[@]} )); then
+	printf '%s\n' "${updates[@]}"
+	if (( DOWNLOAD_CACHE )); then
+		printf '%s\n' "${updates[@]%% *}" | sudo pacman-downloadonly "$CHECKUPDATES_DB"
+		#printf '%s\n' "${updates[@]}" | sudo pacman -Sw --noconfirm --logfile /dev/null --dbpath "$CHECKUPDATES_DB" -
+	fi
+else
+	exit 2
 fi
-
-exit 0
 
 # vim: set noet:
