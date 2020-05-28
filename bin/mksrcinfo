@@ -4,7 +4,9 @@ source /usr/share/makepkg/srcinfo.sh
 source /usr/share/makepkg/util/parseopts.sh
 
 srcinfo_dest=
+MAKEPKG_CONF=
 buildscript=PKGBUILD
+linting=1
 
 usage() {
     cat <<- _EOF_
@@ -16,13 +18,15 @@ usage() {
 
 		Options:
 		    -h, --help              display this help message and exit
-		    -p, --pkgbuild <file>   Read from <file> instead of PKGBUILD
+		    --no-lint               assume PKGBUILD is well-written and do not run lint
+		    -c, --config <file>     use an alternate config file (instead of '/etc/makepkg.conf')
+		    -p, --pkgbuild <file>   read from <file> instead of PKGBUILD
 		    -o, --output <file>     write output to <file>
 _EOF_
 }
 
-OPT_SHORT='p:o:h'
-OPT_LONG=('pkgbuild:' 'output:' 'help')
+OPT_SHORT='nc:p:o:h'
+OPT_LONG=('no-lint' 'config:' 'pkgbuild:' 'output:' 'help')
 
 if ! parseopts "$OPT_SHORT" "${OPT_LONG[@]}" -- "$@"; then
     exit 1
@@ -32,6 +36,8 @@ unset OPT_SHORT OPT_LONG OPTRET
 
 while true; do
     case $1 in
+        --no-lint)      linting=0;;
+        -c|--config)    shift; MAKEPKG_CONF=$1;;
         -p|--pkgbuild)  shift; buildscript=$1;;
         -o|--output)    shift; srcinfo_dest=$1;;
         -h|--help)      usage; exit 0;;
@@ -40,7 +46,18 @@ while true; do
     shift
 done
 
-source "$buildscript"
+source "$buildscript" || exit 1
+pkgbase=${pkgbase:-${pkgname[0]}}
+
+if (( linting )); then
+    source /usr/share/makepkg/util/config.sh
+    source /usr/share/makepkg/lint_pkgbuild.sh
+
+    # need $CARCH too
+    load_makepkg_config
+
+    lint_pkgbuild || exit 1
+fi
 
 [[ -n $srcinfo_dest ]] && exec 1>"$srcinfo_dest"
 write_srcinfo_content
