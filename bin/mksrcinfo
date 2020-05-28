@@ -3,7 +3,7 @@
 source /usr/share/makepkg/srcinfo.sh
 source /usr/share/makepkg/util/parseopts.sh
 
-srcinfo_dest=/dev/stdout
+srcinfo_dest=
 buildscript=PKGBUILD
 
 usage() {
@@ -42,4 +42,5 @@ done
 
 source "$buildscript"
 
-write_srcinfo_content > "$srcinfo_dest"
+[[ -n $srcinfo_dest ]] && exec 1>"$srcinfo_dest"
+write_srcinfo_content
