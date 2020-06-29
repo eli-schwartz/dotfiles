@@ -995,18 +995,26 @@ sub dl_privatebin {
 	my $body = get($url) // return;
 	$body = decode_json($body);
 
-	if ($body->{v} == 2) {
+	if ($body->{v} && $body->{v} == 2) {
+		_trace("redirecting to v2 unwrapper");
 		my $data = $body;
 		$data = unwrap_privatebin_v2($data, $frag);
 		return $data;
 	}
 	elsif ($body->{data}) {
+		_trace("unwrapping old v1 format");
 		my $data = $body->{data} // $body;
 		$data = unwrap_sjcl($data, $frag);
 		$data = decode_base64($data);
 		# The example code that comes with js-deflate mistakenly encodes binary
 		# data as UTF-8, and of course PrivateBin just used it verbatim.
-		$data = encode("latin1", decode("utf-8", $data));
+		# 2020-06-11: Apparently they changed to no longer use deflate.
+		if (eval {decode("utf-8", my $tmp = $data, &Encode::FB_CROAK)}) {
+			_trace("working around js-deflate binary data bug");
+			$data = encode("latin1", decode("utf-8", $data));
+		} else {
+			_trace("skipping js-deflate workaround");
+		}
 		$data = decompress_deflate($data);
 		return $data;
 	}
@@ -1166,6 +1174,11 @@ sub dl_zerobin {
 	{
 		host => "bpaste.net",
 		path => qr!^/\w+/(\w+)!,
+		to_path => "/raw/#1",
+	},
+	{
+		host => "bpa.st",
+		path => qr!^/(\w+)!,
 		to_path => "/raw/#1",
 	},
 	{
