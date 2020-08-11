@@ -27,7 +27,7 @@ checklibs() {
     msg "checking linked libraries for ${pkgfile##*/} ..."
     while read -rd '' file; do
         liblist="$(objdump -p "$file" 2> /dev/null | grep -E "NEEDED\s+$1")"
-        [[ -n "$liblist" ]] && printf "%s\n%s\n" "${file#$workdir}" "$liblist" && found=1
+        [[ -n "$liblist" ]] && printf "%s\n%s\n" "$file" "$liblist" && found=1
     done
     [[ $found ]]
 }
@@ -36,7 +36,7 @@ checksyms() {
     msg "checking linked symbols for ${pkgfile##*/} ..."
     while read -rd '' file; do
         liblist="$(nm --with-symbol-versions -D "$file" 2>/dev/null | awk 'NF>1 && $NF ~ /'"$1"'/{printf "\t%s\n",$NF}')"
-        [[ -n "$liblist" ]] && printf "%s\n%s\n" "${file#$workdir}" "$liblist" && found=1
+        [[ -n "$liblist" ]] && printf "%s\n%s\n" "${file#./}" "$liblist" && found=1
     done
     [[ $found ]]
 }
@@ -85,7 +85,10 @@ fi
 
 workdir="$(mktemp -d)"
 bsdtar xf "$pkgfile" -C "$workdir"
-find "$workdir" -type f -print0 | sort -z | $func "$2"
+(
+    cd "$workdir"
+    find . -type f ! -regex '\./\..*' -printf '%P\0' | sort -z | $func "$2"
+)
 
 (( $? == 0 )) && exit 0
 
