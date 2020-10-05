@@ -1,0 +1,449 @@
+[__config__]
+oldver = "old.txt"
+newver = "new.txt"
+keyfile = "apikey.crypt"
+
+# cinnamon
+
+[cinnamon]
+source = "github"
+github = "linuxmint/Cinnamon"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cinnamon-control-center]
+source = "github"
+github = "linuxmint/cinnamon-control-center"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cinnamon-desktop]
+source = "github"
+github = "linuxmint/cinnamon-desktop"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cinnamon-menus]
+source = "github"
+github = "linuxmint/cinnamon-menus"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cinnamon-screensaver]
+source = "github"
+github = "linuxmint/cinnamon-screensaver"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cinnamon-session]
+source = "github"
+github = "linuxmint/cinnamon-session"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cinnamon-settings-daemon]
+source = "github"
+github = "linuxmint/cinnamon-settings-daemon"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cinnamon-translations]
+source = "github"
+github = "linuxmint/cinnamon-translations"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[cjs]
+source = "github"
+github = "linuxmint/cjs"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[muffin]
+source = "github"
+github = "linuxmint/muffin"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[nemo]
+source = "github"
+github = "linuxmint/nemo"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[nemo-extensions]
+source = "github"
+github = "linuxmint/nemo-extensions"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[python-xapp]
+source = "github"
+github = "linuxmint/python-xapp"
+use_max_tag = true
+
+[xapps]
+source = "github"
+github = "linuxmint/xapps"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[xed]
+source = "github"
+github = "linuxmint/xed"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+[xreader]
+source = "github"
+github = "linuxmint/xreader"
+use_max_tag = true
+#ignored_tags = "master.mint18 master.mint19 master.lmde3"
+
+# other packages I need to depend on
+
+[mupdf]
+source = "archpkg"
+archpkg = "mupdf"
+
+[glib2-debug]
+source = "archpkg"
+archpkg = "glib2"
+
+[gtk3-debug]
+source = "archpkg"
+archpkg = "gtk3"
+
+[qt5-base-debug]
+source = "archpkg"
+archpkg = "qt5-base"
+
+[pyqt5-debug]
+source = "archpkg"
+archpkg = "python-pyqt5"
+
+# misc
+
+[autoconf-archive]
+source = "github"
+github = "peti/autoconf-archive"
+prefix = "v"
+use_max_tag = true
+
+[busybox]
+source = "regex"
+regex = "BusyBox ([0-9.]+) \\(stable\\)"
+url = "https://www.busybox.net/news.html"
+
+[calibre]
+source = "github"
+github = "kovidgoyal/calibre"
+prefix = "v"
+use_latest_release = true
+
+[checkbashisms]
+source = "debianpkg"
+debianpkg = "devscripts"
+
+[thunderbird-extension-enigmail]
+source = "gitlab"
+gitlab = "enigmail/enigmail"
+prefix = "enigmail-"
+use_max_tag = true
+exclude_regex = ".*(alpha|beta).*"
+
+[exploitdb]
+source = "github"
+github = "offensive-security/exploitdb"
+use_max_tag = true
+
+[fanficfare]
+source = "github"
+github = "JimmXinu/FanFicFare"
+prefix = "v"
+use_latest_release = true
+
+[firefox-extension-privacybadger]
+source = "github"
+github = "EFFOrg/privacybadger"
+prefix = "release-"
+use_max_tag = true
+
+[firefox-extension-https-everywhere]
+source = "github"
+github = "EFFOrg/https-everywhere"
+use_max_tag = true
+
+[firefox-adblock-plus]
+source = "cmd"
+cmd = "firefox-extension-testupdate.sh adblock-plus adblock_plus raw"
+#url = https://hg.adblockplus.org/adblockpluschrome/raw-file/tip/.hgtags
+#regex = [a-z0-9] ([0-9.]+)
+
+[firefox-noscript]
+source = "cmd"
+cmd = "firefox-extension-testupdate.sh noscript noscript_security_suite raw"
+
+[lastpass]
+source = "cmd"
+cmd = "firefox-extension-testupdate.sh lastpass-password-manager lastpass_password_manager raw"
+
+[git-crypt]
+source = "github"
+github = "AGWA/git-crypt"
+use_max_tag = true
+
+[guake]
+source = "github"
+github = "guake/guake"
+use_latest_release = true
+
+[hub]
+source = "github"
+github = "github/hub"
+prefix = "v"
+use_latest_release = true
+
+[llpp]
+source = "github"
+github = "moosotc/llpp"
+prefix = "v"
+use_max_tag = true
+
+[keybase]
+source = "github"
+github = "keybase/client"
+prefix = "v"
+use_max_tag = true
+
+[kindletool]
+source = "github"
+github = "NiLuJe/KindleTool"
+prefix = "v"
+use_max_tag = true
+
+[kmon]
+source = "github"
+github = "orhun/kmon"
+prefix = "v"
+use_latest_release = true
+
+#[lastpass-cli-git]
+#source = "vcs"
+#vcs = "git+https://github.com/lastpass/lastpass-cli.git"
+
+#[musl]
+#source = "vcs"
+#vcs = "git://git.musl-libc.org/musl"
+#use_max_tag = true
+#prefix = "v"
+
+#[pacman]
+#source = "vcs"
+#vcs = "git+https://git.archlinux.org/pacman.git"
+#use_max_tag = true
+#prefix = "v"
+
+[pageedit]
+source = "github"
+github = "Sigil-Ebook/PageEdit"
+use_max_tag = true
+
+[python-apsw]
+source = "github"
+github = "rogerbinns/apsw"
+from_pattern = "(.*)-r1$"
+to_pattern = "\\1"
+use_max_tag = true
+
+[python-bowler]
+source = "pypi"
+pypi = "bowler"
+
+[python-cachecontrol]
+source = "pypi"
+pypi = "CacheControl"
+
+[python-cleo]
+source = "pypi"
+pypi = "cleo"
+
+[python-clikit]
+source = "pypi"
+pypi = "clikit"
+
+[python-cssutils]
+source = "pypi"
+pypi = "cssutils"
+
+[python-dateutil]
+source = "pypi"
+pypi = "python-dateutil"
+
+[python-dephell]
+source = "pypi"
+pypi = "dephell"
+
+[python-dephell-archive]
+source = "pypi"
+pypi = "dephell-archive"
+
+[python-dephell-changelogs]
+source = "pypi"
+pypi = "dephell-changelogs"
+
+[python-dephell-discover]
+source = "pypi"
+pypi = "dephell-discover"
+
+[python-dephell-licenses]
+source = "pypi"
+pypi = "dephell-licenses"
+
+[python-dephell-links]
+source = "pypi"
+pypi = "dephell-links"
+
+[python-dephell-markers]
+source = "pypi"
+pypi = "dephell-markers"
+
+[python-dephell-pythons]
+source = "pypi"
+pypi = "dephell-pythons"
+
+[python-dephell-shells]
+source = "pypi"
+pypi = "dephell-shells"
+
+[python-dephell-specifier]
+source = "pypi"
+pypi = "dephell-specifier"
+
+[python-dephell-venvs]
+source = "pypi"
+pypi = "dephell-venvs"
+
+[python-dephell-versioning]
+source = "pypi"
+pypi = "dephell-versioning"
+
+[python-distlib]
+source = "pypi"
+pypi = "distlib"
+
+[python-dnspython]
+source = "pypi"
+pypi = "dnspython"
+
+[python-dukpy]
+source = "github"
+github = "kovidgoyal/dukpy"
+prefix = "v"
+use_max_tag = true
+
+[python-fakeredis]
+source = "pypi"
+pypi = "fakeredis"
+
+[python-fissix]
+source = "pypi"
+pypi = "fissix"
+
+[python-graphviz]
+source = "pypi"
+pypi = "graphviz"
+
+[python-html5lib]
+source = "pypi"
+pypi = "html5lib"
+
+[python-html5-parser]
+source = "pypi"
+pypi = "html5-parser"
+
+[python-httpcore]
+source = "pypi"
+pypi = "httpcore"
+
+[python-httpx]
+source = "pypi"
+pypi = "httpx"
+
+[python-lupa]
+source = "pypi"
+pypi = "lupa"
+
+[python-mechanize]
+source = "pypi"
+pypi = "mechanize"
+
+[python-pam]
+source = "pypi"
+pypi = "python-pam"
+
+[python-pastel]
+source = "pypi"
+pypi = "pastel"
+
+[python-poetry]
+source = "pypi"
+pypi = "poetry"
+
+[python-progress]
+source = "pypi"
+pypi = "progress"
+
+[python-pychm]
+source = "pypi"
+pypi = "pychm"
+
+[python-pytest-expect]
+source = "pypi"
+pypi = "pytest-expect"
+
+[python-pytoml]
+source = "pypi"
+pypi = "pytoml"
+
+[python-regex]
+source = "pypi"
+pypi = "regex"
+
+[python-shellingham]
+source = "pypi"
+pypi = "shellingham"
+
+[python-u-msgpack]
+source = "pypi"
+pypi = "u-msgpack-python"
+
+[python-unrardll]
+source = "pypi"
+pypi = "unrardll"
+
+[qbittorrent]
+source = "github"
+github = "qbittorrent/qBittorrent"
+prefix = "release-"
+use_max_tag = true
+
+[rapydscript-ng]
+source = "github"
+github = "kovidgoyal/rapydscript-ng"
+prefix = "v"
+use_max_tag = true
+
+[samurai]
+source = "github"
+github = "michaelforney/samurai"
+use_max_tag = true
+
+[sigil]
+source = "github"
+github = "Sigil-Ebook/Sigil"
+use_max_tag = true
+
+[wikicurses]
+source = "pypi"
+pypi = "wikicurses"
