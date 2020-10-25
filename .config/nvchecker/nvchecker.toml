@@ -257,9 +257,9 @@ pypi = "cleo"
 source = "pypi"
 pypi = "clikit"
 
-[python-cssutils]
+[python-css-parser]
 source = "pypi"
-pypi = "cssutils"
+pypi = "css-parser"
 
 [python-dateutil]
 source = "pypi"
