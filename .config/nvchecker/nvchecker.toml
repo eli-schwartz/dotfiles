@@ -9,73 +9,61 @@ keyfile = "apikey.crypt"
 source = "github"
 github = "linuxmint/Cinnamon"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cinnamon-control-center]
 source = "github"
 github = "linuxmint/cinnamon-control-center"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cinnamon-desktop]
 source = "github"
 github = "linuxmint/cinnamon-desktop"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cinnamon-menus]
 source = "github"
 github = "linuxmint/cinnamon-menus"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cinnamon-screensaver]
 source = "github"
 github = "linuxmint/cinnamon-screensaver"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cinnamon-session]
 source = "github"
 github = "linuxmint/cinnamon-session"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cinnamon-settings-daemon]
 source = "github"
 github = "linuxmint/cinnamon-settings-daemon"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cinnamon-translations]
 source = "github"
 github = "linuxmint/cinnamon-translations"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [cjs]
 source = "github"
 github = "linuxmint/cjs"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [muffin]
 source = "github"
 github = "linuxmint/muffin"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [nemo]
 source = "github"
 github = "linuxmint/nemo"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [nemo-extensions]
 source = "github"
 github = "linuxmint/nemo-extensions"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [python-xapp]
 source = "github"
@@ -86,19 +74,16 @@ use_max_tag = true
 source = "github"
 github = "linuxmint/xapps"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [xed]
 source = "github"
 github = "linuxmint/xed"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 [xreader]
 source = "github"
 github = "linuxmint/xreader"
 use_max_tag = true
-#ignored_tags = "master.mint18 master.mint19 master.lmde3"
 
 # other packages I need to depend on
 
