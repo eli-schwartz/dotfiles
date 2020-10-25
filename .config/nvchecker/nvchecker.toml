@@ -217,17 +217,15 @@ use_latest_release = true
 #source = "vcs"
 #vcs = "git+https://github.com/lastpass/lastpass-cli.git"
 
-#[musl]
-#source = "vcs"
-#vcs = "git://git.musl-libc.org/musl"
-#use_max_tag = true
-#prefix = "v"
+[musl]
+source = "git"
+git = "git://git.musl-libc.org/musl"
+prefix = "v"
 
-#[pacman]
-#source = "vcs"
-#vcs = "git+https://git.archlinux.org/pacman.git"
-#use_max_tag = true
-#prefix = "v"
+[pacman]
+source = "git"
+git = "https://git.archlinux.org/pacman.git"
+prefix = "v"
 
 [pageedit]
 source = "github"
