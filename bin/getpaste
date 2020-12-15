@@ -11,6 +11,7 @@ no locale;
 use open qw(:std :utf8);
 use Encode qw(decode encode);
 use Getopt::Long qw(:config bundling no_ignore_case);
+use HTML::Entities;
 use JSON;
 use LWP::UserAgent;
 use MIME::Base64;
@@ -871,7 +872,7 @@ sub dl_defuse {
 
 	if ($body =~ m{<textarea id="paste"[^>]*>(.+?)</textarea>}) {
 		my $data = $1;
-		$data = decode_html($data);
+		$data = decode_entities($data);
 		return $data;
 	}
 
@@ -906,6 +907,16 @@ sub dl_dgl_pastesh {
 	my $data = decode_base64($body);
 	$data = unwrap_openssl_aes($data, $passwd, (kdf_algo => "SHA512"));
 	return $data;
+}
+
+sub dl_dpaste {
+	my ($url, $frag) = @_;
+
+	my $body = get($url);
+	if ($body =~ m{<textarea id="copySnippetSource">(.+?)</textarea>}s) {
+		return decode_entities($1);
+	}
+	return;
 }
 
 sub dl_ezcrypt {
@@ -1217,9 +1228,14 @@ sub dl_zerobin {
 		to_path => "#0.txt",
 	},
 	{
-		host => ["dpaste.org", "dpaste.de"],
+		host => "dpaste.de",
 		path => qr!^/\w+!,
 		to_path => "#0/raw/",
+	},
+	{
+		host => "dpaste.org",
+		path => qr!^/\w+!,
+		parser => \&dl_dpaste,
 	},
 	{
 		host => "www.dropbox.com",
