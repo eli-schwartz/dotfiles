@@ -255,6 +255,10 @@ pypi = "cleo"
 source = "pypi"
 pypi = "clikit"
 
+[python-cloudscraper]
+source = "pypi"
+pypi = "cloudscraper"
+
 [python-css-parser]
 source = "pypi"
 pypi = "css-parser"
