@@ -1,0 +1,3 @@
+#!/bin/sh
+
+LIBRARY=/home/eschwartz/bin/makepkg-parabola /usr/bin/makepkg "$@"

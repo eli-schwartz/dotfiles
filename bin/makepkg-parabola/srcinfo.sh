@@ -1,0 +1,1 @@
+/usr/share/makepkg/srcinfo.sh

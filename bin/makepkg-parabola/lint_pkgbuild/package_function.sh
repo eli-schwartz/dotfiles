@@ -1,0 +1,1 @@
+/usr/share/makepkg/lint_pkgbuild/package_function.sh
