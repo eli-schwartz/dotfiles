@@ -109,6 +109,11 @@ archpkg = "python-pyqt5"
 
 # misc
 
+[asciidoc]
+source = "github"
+github = "asciidoc-py/asciidoc-py"
+use_latest_release = true
+
 [autoconf-archive]
 source = "github"
 github = "peti/autoconf-archive"
@@ -183,6 +188,10 @@ source = "github"
 github = "guake/guake"
 use_latest_release = true
 
+[hotdoc]
+source = "pypi"
+pypi = "hotdoc"
+
 [hub]
 source = "github"
 github = "github/hub"
@@ -217,10 +226,30 @@ use_latest_release = true
 #source = "vcs"
 #vcs = "git+https://github.com/lastpass/lastpass-cli.git"
 
+[libretls]
+source = "git"
+git = "https://git.causal.agency/libretls"
+
+[mandoc]
+source = "regex"
+regex = "mandoc-([0-9.]+).tar.gz"
+url = "https://mandoc.bsd.lv/snapshots/"
+
 [musl]
 source = "git"
 git = "git://git.musl-libc.org/musl"
 prefix = "v"
+
+[ncdu]
+source = "git"
+git = "git://g.blicky.net/ncdu.git/"
+prefix = "v"
+
+[ncompress]
+source = "github"
+github = "vapier/ncompress"
+prefix = "v"
+use_max_tag = true
 
 [pacman]
 source = "git"
@@ -239,6 +268,10 @@ from_pattern = "(.*)-r1$"
 to_pattern = "\\1"
 use_max_tag = true
 
+[python-authlib]
+source = "pypi"
+pypi = "authlib"
+
 [python-bowler]
 source = "pypi"
 pypi = "bowler"
@@ -246,6 +279,10 @@ pypi = "bowler"
 [python-cachecontrol]
 source = "pypi"
 pypi = "CacheControl"
+
+[python-cachy]
+source = "pypi"
+pypi = "cachy"
 
 [python-cleo]
 source = "pypi"
@@ -259,6 +296,10 @@ pypi = "clikit"
 source = "pypi"
 pypi = "cloudscraper"
 
+[python-crashtest]
+source = "pypi"
+pypi = "crashtest"
+
 [python-css-parser]
 source = "pypi"
 pypi = "css-parser"
@@ -266,6 +307,10 @@ pypi = "css-parser"
 [python-dateutil]
 source = "pypi"
 pypi = "python-dateutil"
+
+[python-dbus-deviation]
+source = "pypi"
+pypi = "dbus-deviation"
 
 [python-dephell]
 source = "pypi"
@@ -337,6 +382,10 @@ pypi = "fakeredis"
 source = "pypi"
 pypi = "fissix"
 
+[python-genshi]
+source = "pypi"
+pypi = "genshi"
+
 [python-graphviz]
 source = "pypi"
 pypi = "graphviz"
@@ -361,6 +410,10 @@ pypi = "httpx"
 source = "pypi"
 pypi = "lupa"
 
+[python-markdown]
+source = "pypi"
+pypi = "markdown"
+
 [python-mechanize]
 source = "pypi"
 pypi = "mechanize"
@@ -377,13 +430,25 @@ pypi = "pastel"
 source = "pypi"
 pypi = "poetry"
 
+[python-poetry-core]
+source = "pypi"
+pypi = "poetry-core"
+
 [python-progress]
 source = "pypi"
 pypi = "progress"
 
+[python-py7zr]
+source = "pypi"
+pypi = "py7zr"
+
 [python-pychm]
 source = "pypi"
 pypi = "pychm"
+
+[python-pylev]
+source = "pypi"
+pypi = "pylev"
 
 [python-pytest-expect]
 source = "pypi"
@@ -401,6 +466,10 @@ pypi = "regex"
 source = "pypi"
 pypi = "shellingham"
 
+[python-tomlkit]
+source = "pypi"
+pypi = "tomlkit"
+
 [python-u-msgpack]
 source = "pypi"
 pypi = "u-msgpack-python"
@@ -408,6 +477,10 @@ pypi = "u-msgpack-python"
 [python-unrardll]
 source = "pypi"
 pypi = "unrardll"
+
+[python-wheezy-template]
+source = "pypi"
+pypi = "wheezy.template"
 
 [qbittorrent]
 source = "github"
@@ -430,6 +503,22 @@ use_max_tag = true
 source = "github"
 github = "Sigil-Ebook/Sigil"
 use_max_tag = true
+
+[sx]
+source = "github"
+github = "Earnestly/sx"
+use_max_tag = true
+
+[trash-cli]
+source = "github"
+github = "andreafrancia/trash-cli"
+use_max_tag = true
+
+[weechat]
+source = "github"
+github = "weechat/weechat"
+prefix = "v"
+use_latest_release = true
 
 [wikicurses]
 source = "pypi"
