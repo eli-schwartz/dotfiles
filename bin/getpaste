@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 # getpaste - retrieves raw text from pastebins
-# retrieved from https://github.com/grawity/code/raw/master/net/getpaste
+# retrieved from https://github.com/grawity/getpaste/raw/master/getpaste
 #
 # (c) 2010-2015 Mantas Mikulėnas <grawity@gmail.com>
 # Released under the MIT License (dist/LICENSE.mit)
