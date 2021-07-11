@@ -103,6 +103,10 @@ archpkg = "gtk3"
 source = "archpkg"
 archpkg = "qt5-base"
 
+[qt5-webengine-debug]
+source = "archpkg"
+archpkg = "qt5-webengine"
+
 [pyqt5-debug]
 source = "archpkg"
 archpkg = "python-pyqt5"
