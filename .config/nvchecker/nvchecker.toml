@@ -253,7 +253,7 @@ use_max_tag = true
 
 [pacman]
 source = "git"
-git = "https://git.archlinux.org/pacman.git"
+git = "https://gitlab.archlinux.org/pacman/pacman"
 prefix = "v"
 
 [pageedit]
